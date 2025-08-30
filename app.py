@@ -141,43 +141,32 @@ def extract_gdrive_id(url):
             return match.group(1)
     return None
 
+def convert_gdrive_to_direct_link(url):
+    """Convert Google Drive URL to your direct download service"""
+    if is_gdrive_url(url):
+        file_id = extract_gdrive_id(url)
+        if file_id:
+            # Convert to your direct download service
+            direct_url = f"https://gdl.anshumanpm.eu.org/direct.aspx?id={file_id}"
+            return direct_url
+    return url
+
 def download_sample(url, max_size=10*1024*1024):
-    """Download sample using multiple fallback methods for Google Drive"""
+    """Download sample from direct URL (including converted Google Drive links)"""
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
         
+        # Convert Google Drive URLs to your direct download service
+        original_url = url
         if is_gdrive_url(url):
-            file_id = extract_gdrive_id(url)
-            if not file_id:
-                raise Exception("Could not extract Google Drive file ID")
-            
-            # Multiple fallback URLs for Google Drive (no credentials needed)
-            gdrive_methods = [
-                f"https://drive.usercontent.google.com/download?id={file_id}&export=download",
-                f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t",
-                f"https://docs.google.com/uc?export=download&id={file_id}",
-            ]
-            
-            for gdrive_url in gdrive_methods:
-                try:
-                    response = requests.get(gdrive_url, headers=headers, stream=True, timeout=30, allow_redirects=True)
-                    
-                    # Skip if we get HTML (error page)
-                    content_type = response.headers.get('content-type', '').lower()
-                    if 'text/html' in content_type and response.status_code != 200:
-                        continue
-                    
-                    response.raise_for_status()
-                    break
-                except:
-                    continue
-            else:
-                raise Exception("All Google Drive download methods failed - file may be private or restricted")
-        else:
-            response = requests.get(url, headers=headers, stream=True, timeout=30)
-            response.raise_for_status()
+            url = convert_gdrive_to_direct_link(url)
+            print(f"Converted Google Drive URL: {original_url} -> {url}")
+        
+        # Download from the (possibly converted) URL
+        response = requests.get(url, headers=headers, stream=True, timeout=30)
+        response.raise_for_status()
         
         # Download sample
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.tmp')
@@ -211,7 +200,13 @@ def mediainfo_api():
                 "json_format": "/?url=https://example.com/video.mp4&format=json",
                 "gdrive_link": "/?url=https://drive.google.com/file/d/FILE_ID/view&format=text"
             },
-            "note": "Default format is 'text' (MediaInfo style output)"
+            "features": [
+                "Google Drive links automatically converted to direct download",
+                "MediaInfo-style text output",
+                "JSON format support",
+                "10MB sample analysis for large files"
+            ],
+            "note": "Google Drive links are converted to gdl.anshumanpm.eu.org direct links"
         })
     
     try:
@@ -222,10 +217,14 @@ def mediainfo_api():
             # Parse with MediaInfo
             media_info = MediaInfo.parse(temp_path)
             
-            # Get filename from URL
+            # Get filename from URL (use original URL for filename extraction)
             parsed_url = urlparse(url)
             filename = os.path.basename(parsed_url.path) or "media_file"
             filename = unquote(filename)
+            
+            # If filename is generic from direct.aspx, try to get a better name
+            if filename in ['direct.aspx', 'media_file'] and is_gdrive_url(url):
+                filename = f"gdrive_file_{extract_gdrive_id(url)[:8]}"
             
             if output_format == 'json':
                 # Build JSON response
@@ -251,8 +250,10 @@ def mediainfo_api():
                 result = {
                     "filename": filename,
                     "file_size": get_readable_bytes(content_length) if content_length else "Unknown",
+                    "original_url": url,
+                    "download_url": convert_gdrive_to_direct_link(url) if is_gdrive_url(url) else url,
                     "tracks": tracks_data,
-                    "api_version": "Full MediaInfo v1.0"
+                    "api_version": "Full MediaInfo v1.1"
                 }
                 
                 return jsonify(result)
@@ -607,7 +608,7 @@ def info():
     """API information endpoint"""
     return jsonify({
         "api_name": "MediaInfo API",
-        "version": "1.0",
+        "version": "1.1",
         "description": "Extract detailed media information from video and audio files",
         "endpoints": {
             "/": "Main MediaInfo analysis endpoint",
@@ -616,11 +617,12 @@ def info():
         },
         "supported_url_types": [
             "Direct download links",
-            "Google Drive links",
+            "Google Drive links (auto-converted to gdl.anshumanpm.eu.org)",
             "HTTP/HTTPS URLs"
         ],
         "output_formats": ["json", "text"],
         "max_sample_size": "10MB",
+        "gdrive_conversion": "Google Drive URLs are automatically converted to gdl.anshumanpm.eu.org direct links",
         "deployment": "Render with Docker"
     })
 

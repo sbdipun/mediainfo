@@ -83,7 +83,7 @@ def format_frame_rate(frame_rate):
         else:
             return f"{fr:.3f} FPS"
     except:
-        return frame_rate
+        return str(frame_rate)
 
 def format_pixel_dimensions(width, height):
     """Format pixel dimensions with proper spacing"""
@@ -94,6 +94,34 @@ def format_pixel_dimensions(width, height):
         return width_str, height_str
     except:
         return str(width), str(height)
+
+def format_boolean_field(track, field_name, display_name):
+    """Format boolean fields properly"""
+    if not hasattr(track, field_name):
+        return None
+    
+    value = getattr(track, field_name)
+    
+    # Skip if None or empty
+    if value is None or value == '':
+        return None
+    
+    # Handle different boolean representations from MediaInfo
+    if isinstance(value, str):
+        value_lower = value.lower().strip()
+        if value_lower in ['yes', '1', 'true']:
+            return f"{display_name}                                  : Yes"
+        elif value_lower in ['no', '0', 'false']:
+            return f"{display_name}                                  : No"
+    elif isinstance(value, bool):
+        return f"{display_name}                                  : {'Yes' if value else 'No'}"
+    elif isinstance(value, (int, float)):
+        if value == 1:
+            return f"{display_name}                                  : Yes"
+        elif value == 0:
+            return f"{display_name}                                  : No"
+    
+    return None
 
 def is_gdrive_url(url):
     """Check if URL is a Google Drive link"""
@@ -114,22 +142,44 @@ def extract_gdrive_id(url):
     return None
 
 def download_sample(url, max_size=10*1024*1024):
-    """Download a sample of the file for mediainfo analysis"""
+    """Download sample using multiple fallback methods for Google Drive"""
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
         
-        # Handle Google Drive URLs
         if is_gdrive_url(url):
             file_id = extract_gdrive_id(url)
-            if file_id:
-                url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            if not file_id:
+                raise Exception("Could not extract Google Drive file ID")
+            
+            # Multiple fallback URLs for Google Drive (no credentials needed)
+            gdrive_methods = [
+                f"https://drive.usercontent.google.com/download?id={file_id}&export=download",
+                f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t",
+                f"https://docs.google.com/uc?export=download&id={file_id}",
+            ]
+            
+            for gdrive_url in gdrive_methods:
+                try:
+                    response = requests.get(gdrive_url, headers=headers, stream=True, timeout=30, allow_redirects=True)
+                    
+                    # Skip if we get HTML (error page)
+                    content_type = response.headers.get('content-type', '').lower()
+                    if 'text/html' in content_type and response.status_code != 200:
+                        continue
+                    
+                    response.raise_for_status()
+                    break
+                except:
+                    continue
+            else:
+                raise Exception("All Google Drive download methods failed - file may be private or restricted")
+        else:
+            response = requests.get(url, headers=headers, stream=True, timeout=30)
+            response.raise_for_status()
         
-        response = requests.get(url, headers=headers, stream=True, timeout=30)
-        response.raise_for_status()
-        
-        # Create temporary file
+        # Download sample
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.tmp')
         downloaded = 0
         
@@ -178,7 +228,7 @@ def mediainfo_api():
             filename = unquote(filename)
             
             if output_format == 'json':
-                # Build JSON response (existing code)
+                # Build JSON response
                 tracks_data = []
                 
                 for track in media_info.tracks:
@@ -353,19 +403,16 @@ def mediainfo_api():
                         # Stream size
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
-                                proportion = f"({track.stream_size_proportion})"
-                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
-                            else:
-                                output_lines.append(f"Stream size                              : {stream_size}")
+                            output_lines.append(f"Stream size                              : {stream_size}")
                         
-                        # Default
-                        if hasattr(track, 'default') and track.default is not None:
-                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        # Default and Forced (corrected)
+                        default_line = format_boolean_field(track, 'default', 'Default')
+                        if default_line:
+                            output_lines.append(default_line)
                         
-                        # Forced
-                        if hasattr(track, 'forced') and track.forced is not None:
-                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                        forced_line = format_boolean_field(track, 'forced', 'Forced')
+                        if forced_line:
+                            output_lines.append(forced_line)
                     
                     elif track.track_type == 'Audio':
                         audio_count += 1
@@ -406,10 +453,6 @@ def mediainfo_api():
                         if hasattr(track, 'bit_rate') and track.bit_rate:
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
                         
-                        # Maximum bit rate
-                        if hasattr(track, 'bit_rate_maximum') and track.bit_rate_maximum:
-                            output_lines.append(f"Maximum bit rate                         : {get_readable_bitrate(track.bit_rate_maximum)}")
-                        
                         # Channel(s)
                         if hasattr(track, 'channel_s') and track.channel_s:
                             output_lines.append(f"Channel(s)                               : {track.channel_s}")
@@ -437,11 +480,7 @@ def mediainfo_api():
                         # Stream size
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
-                                proportion = f"({track.stream_size_proportion})"
-                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
-                            else:
-                                output_lines.append(f"Stream size                              : {stream_size}")
+                            output_lines.append(f"Stream size                              : {stream_size}")
                         
                         # Title
                         if hasattr(track, 'title') and track.title:
@@ -451,13 +490,14 @@ def mediainfo_api():
                         if hasattr(track, 'language') and track.language:
                             output_lines.append(f"Language                                 : {track.language}")
                         
-                        # Default
-                        if hasattr(track, 'default') and track.default is not None:
-                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        # Default and Forced (corrected)
+                        default_line = format_boolean_field(track, 'default', 'Default')
+                        if default_line:
+                            output_lines.append(default_line)
                         
-                        # Forced
-                        if hasattr(track, 'forced') and track.forced is not None:
-                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                        forced_line = format_boolean_field(track, 'forced', 'Forced')
+                        if forced_line:
+                            output_lines.append(forced_line)
                     
                     elif track.track_type == 'Text':
                         text_count += 1
@@ -501,11 +541,7 @@ def mediainfo_api():
                         # Stream size
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
-                                proportion = f"({track.stream_size_proportion})"
-                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
-                            else:
-                                output_lines.append(f"Stream size                              : {stream_size}")
+                            output_lines.append(f"Stream size                              : {stream_size}")
                         
                         # Title
                         if hasattr(track, 'title') and track.title:
@@ -515,13 +551,14 @@ def mediainfo_api():
                         if hasattr(track, 'language') and track.language:
                             output_lines.append(f"Language                                 : {track.language}")
                         
-                        # Default
-                        if hasattr(track, 'default') and track.default is not None:
-                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        # Default and Forced (corrected)
+                        default_line = format_boolean_field(track, 'default', 'Default')
+                        if default_line:
+                            output_lines.append(default_line)
                         
-                        # Forced
-                        if hasattr(track, 'forced') and track.forced is not None:
-                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                        forced_line = format_boolean_field(track, 'forced', 'Forced')
+                        if forced_line:
+                            output_lines.append(forced_line)
                     
                     elif track.track_type == 'Menu':
                         output_lines.append("\nMenu")
@@ -564,6 +601,28 @@ def health():
             "error": str(e),
             "mediainfo_available": False
         }), 500
+
+@app.route('/info')
+def info():
+    """API information endpoint"""
+    return jsonify({
+        "api_name": "MediaInfo API",
+        "version": "1.0",
+        "description": "Extract detailed media information from video and audio files",
+        "endpoints": {
+            "/": "Main MediaInfo analysis endpoint",
+            "/health": "Health check",
+            "/info": "API information"
+        },
+        "supported_url_types": [
+            "Direct download links",
+            "Google Drive links",
+            "HTTP/HTTPS URLs"
+        ],
+        "output_formats": ["json", "text"],
+        "max_sample_size": "10MB",
+        "deployment": "Render with Docker"
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))

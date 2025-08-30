@@ -17,32 +17,36 @@ def get_readable_bytes(size_bytes):
         size_bytes = int(size_bytes)
         if size_bytes == 0:
             return "0B"
-        size_names = ["B", "KB", "MB", "GB", "TB"]
-        import math
-        i = int(math.floor(math.log(size_bytes, 1024)))
-        p = math.pow(1024, i)
-        s = round(size_bytes / p, 2)
-        return f"{s} {size_names[i]}"
+        
+        # Convert to GiB, MiB, etc. for proper MediaInfo format
+        if size_bytes >= 1024**3:
+            return f"{size_bytes / (1024**3):.1f} GiB"
+        elif size_bytes >= 1024**2:
+            return f"{size_bytes / (1024**2):.1f} MiB"
+        elif size_bytes >= 1024:
+            return f"{size_bytes / 1024:.1f} KiB"
+        else:
+            return f"{size_bytes} B"
     except:
         return "Unknown"
 
 def get_readable_bitrate(bitrate_bps):
-    """Convert bitrate to human readable format"""
+    """Convert bitrate to MediaInfo format"""
     if not bitrate_bps:
         return "Unknown"
     try:
         bitrate_bps = float(bitrate_bps)
-        if bitrate_bps < 1000:
-            return f"{bitrate_bps:.0f} bps"
-        elif bitrate_bps < 1000000:
-            return f"{bitrate_bps/1000:.1f} Kbps"
+        if bitrate_bps >= 1000000:
+            return f"{bitrate_bps/1000000:.1f} Mb/s"
+        elif bitrate_bps >= 1000:
+            return f"{bitrate_bps/1000:.0f} kb/s"
         else:
-            return f"{bitrate_bps/1000000:.1f} Mbps"
+            return f"{bitrate_bps:.0f} b/s"
     except:
         return "Unknown"
 
 def format_duration(duration_ms):
-    """Convert duration from milliseconds to HH:MM:SS format"""
+    """Convert duration to MediaInfo format (e.g., '1 h 35 min')"""
     if not duration_ms:
         return "Unknown"
     try:
@@ -50,9 +54,46 @@ def format_duration(duration_ms):
         hours = int(duration_sec // 3600)
         minutes = int((duration_sec % 3600) // 60)
         seconds = int(duration_sec % 60)
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        
+        if hours > 0:
+            if minutes > 0:
+                return f"{hours} h {minutes} min"
+            else:
+                return f"{hours} h"
+        elif minutes > 0:
+            if seconds > 0:
+                return f"{minutes} min {seconds} s"
+            else:
+                return f"{minutes} min"
+        else:
+            return f"{seconds} s"
     except:
         return "Unknown"
+
+def format_frame_rate(frame_rate):
+    """Format frame rate to MediaInfo style"""
+    if not frame_rate:
+        return "Unknown"
+    try:
+        fr = float(frame_rate)
+        if abs(fr - 23.976) < 0.01:
+            return "23.976 (24000/1001) FPS"
+        elif abs(fr - 29.97) < 0.01:
+            return "29.970 (30000/1001) FPS"
+        else:
+            return f"{fr:.3f} FPS"
+    except:
+        return frame_rate
+
+def format_pixel_dimensions(width, height):
+    """Format pixel dimensions with proper spacing"""
+    try:
+        # Add spaces for thousands like MediaInfo does
+        width_str = f"{int(width):,}".replace(",", " ")
+        height_str = f"{int(height):,}".replace(",", " ")
+        return width_str, height_str
+    except:
+        return str(width), str(height)
 
 def is_gdrive_url(url):
     """Check if URL is a Google Drive link"""
@@ -108,26 +149,19 @@ def download_sample(url, max_size=10*1024*1024):
 @app.route('/', methods=['GET'])
 def mediainfo_api():
     url = request.args.get('url')
-    output_format = request.args.get('format', 'json').lower()
+    output_format = request.args.get('format', 'text').lower()
     
     if not url:
         return jsonify({
-            "message": "MediaInfo API - Full Version on Render",
+            "message": "MediaInfo API - Full Version",
             "status": "online",
             "usage": "GET /?url=<media_url>&format=<json|text>",
             "examples": {
-                "json_format": "/?url=https://example.com/video.mp4&format=json",
                 "text_format": "/?url=https://example.com/video.mp4&format=text",
-                "gdrive_link": "/?url=https://drive.google.com/file/d/FILE_ID/view&format=json"
+                "json_format": "/?url=https://example.com/video.mp4&format=json",
+                "gdrive_link": "/?url=https://drive.google.com/file/d/FILE_ID/view&format=text"
             },
-            "supported_formats": ["MP4", "AVI", "MKV", "MOV", "MP3", "WAV", "FLAC", "AAC"],
-            "features": [
-                "Full MediaInfo analysis",
-                "Google Drive links support", 
-                "Direct download links",
-                "Resolution, codecs, bitrates",
-                "Duration and technical specs"
-            ]
+            "note": "Default format is 'text' (MediaInfo style output)"
         })
     
     try:
@@ -144,7 +178,7 @@ def mediainfo_api():
             filename = unquote(filename)
             
             if output_format == 'json':
-                # Build detailed JSON response
+                # Build JSON response (existing code)
                 tracks_data = []
                 
                 for track in media_info.tracks:
@@ -153,7 +187,6 @@ def mediainfo_api():
                         'track_id': getattr(track, 'track_id', None)
                     }
                     
-                    # Add all available attributes with better formatting
                     for attr_name in dir(track):
                         if (not attr_name.startswith('_') and 
                             attr_name not in ['track_type', 'track_id'] and
@@ -161,140 +194,344 @@ def mediainfo_api():
                             
                             attr_value = getattr(track, attr_name, None)
                             if attr_value is not None:
-                                # Format specific attributes for better readability
-                                if attr_name == 'duration' and attr_value:
-                                    track_data[attr_name] = attr_value
-                                    track_data['duration_formatted'] = format_duration(attr_value)
-                                elif attr_name in ['bit_rate', 'overall_bit_rate'] and attr_value:
-                                    track_data[attr_name] = attr_value
-                                    track_data[f'{attr_name}_formatted'] = get_readable_bitrate(attr_value)
-                                elif attr_name == 'file_size' and attr_value:
-                                    track_data[attr_name] = attr_value
-                                    track_data['file_size_formatted'] = get_readable_bytes(attr_value)
-                                else:
-                                    track_data[attr_name] = attr_value
+                                track_data[attr_name] = attr_value
                     
                     tracks_data.append(track_data)
                 
                 result = {
                     "filename": filename,
                     "file_size": get_readable_bytes(content_length) if content_length else "Unknown",
-                    "file_size_bytes": content_length,
-                    "url": url,
                     "tracks": tracks_data,
-                    "track_count": len(tracks_data),
-                    "api_version": "Full MediaInfo v1.0",
-                    "timestamp": format_duration(None),  # Current time if needed
-                    "analysis_status": "complete"
+                    "api_version": "Full MediaInfo v1.0"
                 }
                 
                 return jsonify(result)
             
             else:
-                # Text format (MediaInfo style output)
+                # Text format - MediaInfo style output
                 output_lines = []
+                audio_count = 0
+                text_count = 0
                 
                 for track in media_info.tracks:
                     if track.track_type == 'General':
                         output_lines.append("General")
+                        
+                        # Unique ID
+                        if hasattr(track, 'unique_id') and track.unique_id:
+                            output_lines.append(f"Unique ID                                : {track.unique_id}")
+                        
+                        # Complete name
                         output_lines.append(f"Complete name                            : {filename}")
                         
-                        file_size = content_length
-                        if file_size:
-                            output_lines.append(f"File size                                : {get_readable_bytes(file_size)}")
-                        
+                        # Format
                         if hasattr(track, 'format') and track.format:
                             output_lines.append(f"Format                                   : {track.format}")
                         
-                        if hasattr(track, 'format_profile') and track.format_profile:
-                            output_lines.append(f"Format profile                           : {track.format_profile}")
+                        # Format version
+                        if hasattr(track, 'format_version') and track.format_version:
+                            output_lines.append(f"Format version                           : {track.format_version}")
                         
-                        if hasattr(track, 'codec_id') and track.codec_id:
-                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        # File size
+                        file_size = content_length or getattr(track, 'file_size', None)
+                        if file_size:
+                            output_lines.append(f"File size                                : {get_readable_bytes(file_size)}")
                         
+                        # Duration
                         if hasattr(track, 'duration') and track.duration:
                             output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
                         
+                        # Overall bit rate mode
+                        if hasattr(track, 'overall_bit_rate_mode') and track.overall_bit_rate_mode:
+                            output_lines.append(f"Overall bit rate mode                    : {track.overall_bit_rate_mode}")
+                        
+                        # Overall bit rate
                         if hasattr(track, 'overall_bit_rate') and track.overall_bit_rate:
                             output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(track.overall_bit_rate)}")
                         
+                        # Frame rate (if available at container level)
+                        if hasattr(track, 'frame_rate') and track.frame_rate:
+                            output_lines.append(f"Frame rate                               : {format_frame_rate(track.frame_rate)}")
+                        
+                        # Title
+                        if hasattr(track, 'title') and track.title:
+                            output_lines.append(f"Title                                    : {track.title}")
+                        
+                        # Encoded date
+                        if hasattr(track, 'encoded_date') and track.encoded_date:
+                            output_lines.append(f"Encoded date                             : {track.encoded_date}")
+                        
+                        # Writing application
                         if hasattr(track, 'writing_application') and track.writing_application:
                             output_lines.append(f"Writing application                      : {track.writing_application}")
+                        
+                        # Writing library
+                        if hasattr(track, 'writing_library') and track.writing_library:
+                            output_lines.append(f"Writing library                          : {track.writing_library}")
                     
                     elif track.track_type == 'Video':
                         output_lines.append("\nVideo")
                         
+                        # ID
+                        if hasattr(track, 'track_id') and track.track_id:
+                            output_lines.append(f"ID                                       : {track.track_id}")
+                        
+                        # Format
                         if hasattr(track, 'format') and track.format:
                             output_lines.append(f"Format                                   : {track.format}")
                         
+                        # Format/Info
+                        if hasattr(track, 'format_info') and track.format_info:
+                            output_lines.append(f"Format/Info                              : {track.format_info}")
+                        
+                        # Format profile
                         if hasattr(track, 'format_profile') and track.format_profile:
                             output_lines.append(f"Format profile                           : {track.format_profile}")
                         
+                        # Format settings
+                        if hasattr(track, 'format_settings') and track.format_settings:
+                            output_lines.append(f"Format settings                          : {track.format_settings}")
+                        
+                        # Codec ID
                         if hasattr(track, 'codec_id') and track.codec_id:
                             output_lines.append(f"Codec ID                                 : {track.codec_id}")
                         
+                        # Duration
                         if hasattr(track, 'duration') and track.duration:
                             output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
                         
-                        if hasattr(track, 'bit_rate') and track.bit_rate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
-                        
-                        if hasattr(track, 'width') and hasattr(track, 'height'):
-                            output_lines.append(f"Width                                    : {track.width} pixels")
-                            output_lines.append(f"Height                                   : {track.height} pixels")
-                            
-                            # Calculate aspect ratio
-                            if track.width and track.height:
-                                aspect_ratio = track.width / track.height
-                                output_lines.append(f"Display aspect ratio                     : {aspect_ratio:.3f}")
-                        
-                        if hasattr(track, 'frame_rate') and track.frame_rate:
-                            output_lines.append(f"Frame rate                               : {track.frame_rate} FPS")
-                        
-                        if hasattr(track, 'color_space') and track.color_space:
-                            output_lines.append(f"Color space                              : {track.color_space}")
-                        
-                        if hasattr(track, 'chroma_subsampling') and track.chroma_subsampling:
-                            output_lines.append(f"Chroma subsampling                       : {track.chroma_subsampling}")
-                        
-                        if hasattr(track, 'bit_depth') and track.bit_depth:
-                            output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
-                    
-                    elif track.track_type == 'Audio':
-                        output_lines.append("\nAudio")
-                        
-                        if hasattr(track, 'format') and track.format:
-                            output_lines.append(f"Format                                   : {track.format}")
-                        
-                        if hasattr(track, 'format_profile') and track.format_profile:
-                            output_lines.append(f"Format profile                           : {track.format_profile}")
-                        
-                        if hasattr(track, 'codec_id') and track.codec_id:
-                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
-                        
-                        if hasattr(track, 'duration') and track.duration:
-                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
-                        
+                        # Bit rate mode
                         if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
                             output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
                         
+                        # Bit rate
                         if hasattr(track, 'bit_rate') and track.bit_rate:
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
                         
-                        if hasattr(track, 'channel_s') and track.channel_s:
-                            output_lines.append(f"Channel(s)                               : {track.channel_s}")
+                        # Dimensions
+                        if hasattr(track, 'width') and hasattr(track, 'height') and track.width and track.height:
+                            width_str, height_str = format_pixel_dimensions(track.width, track.height)
+                            output_lines.append(f"Width                                    : {width_str} pixels")
+                            output_lines.append(f"Height                                   : {height_str} pixels")
                         
-                        if hasattr(track, 'channel_layout') and track.channel_layout:
-                            output_lines.append(f"Channel layout                           : {track.channel_layout}")
+                        # Display aspect ratio
+                        if hasattr(track, 'display_aspect_ratio') and track.display_aspect_ratio:
+                            output_lines.append(f"Display aspect ratio                     : {track.display_aspect_ratio}")
+                        elif hasattr(track, 'width') and hasattr(track, 'height') and track.width and track.height:
+                            # Calculate aspect ratio
+                            width, height = int(track.width), int(track.height)
+                            if width == 1920 and height == 1080:
+                                output_lines.append(f"Display aspect ratio                     : 16:9")
+                            else:
+                                ratio = width / height
+                                output_lines.append(f"Display aspect ratio                     : {ratio:.3f}")
                         
-                        if hasattr(track, 'sampling_rate') and track.sampling_rate:
-                            output_lines.append(f"Sampling rate                            : {track.sampling_rate} Hz")
+                        # Frame rate mode
+                        if hasattr(track, 'frame_rate_mode') and track.frame_rate_mode:
+                            output_lines.append(f"Frame rate mode                          : {track.frame_rate_mode}")
                         
+                        # Frame rate
+                        if hasattr(track, 'frame_rate') and track.frame_rate:
+                            output_lines.append(f"Frame rate                               : {format_frame_rate(track.frame_rate)}")
+                        
+                        # Color space
+                        if hasattr(track, 'color_space') and track.color_space:
+                            output_lines.append(f"Color space                              : {track.color_space}")
+                        
+                        # Chroma subsampling
+                        if hasattr(track, 'chroma_subsampling') and track.chroma_subsampling:
+                            output_lines.append(f"Chroma subsampling                       : {track.chroma_subsampling}")
+                        
+                        # Bit depth
                         if hasattr(track, 'bit_depth') and track.bit_depth:
                             output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
                         
+                        # Scan type
+                        if hasattr(track, 'scan_type') and track.scan_type:
+                            output_lines.append(f"Scan type                                : {track.scan_type}")
+                        
+                        # Stream size
+                        if hasattr(track, 'stream_size') and track.stream_size:
+                            stream_size = get_readable_bytes(track.stream_size)
+                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
+                                proportion = f"({track.stream_size_proportion})"
+                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
+                            else:
+                                output_lines.append(f"Stream size                              : {stream_size}")
+                        
+                        # Default
+                        if hasattr(track, 'default') and track.default is not None:
+                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        
+                        # Forced
+                        if hasattr(track, 'forced') and track.forced is not None:
+                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                    
+                    elif track.track_type == 'Audio':
+                        audio_count += 1
+                        if audio_count == 1:
+                            output_lines.append("\nAudio")
+                        else:
+                            output_lines.append(f"\nAudio #{audio_count}")
+                        
+                        # ID
+                        if hasattr(track, 'track_id') and track.track_id:
+                            output_lines.append(f"ID                                       : {track.track_id}")
+                        
+                        # Format
+                        if hasattr(track, 'format') and track.format:
+                            output_lines.append(f"Format                                   : {track.format}")
+                        
+                        # Format/Info
+                        if hasattr(track, 'format_info') and track.format_info:
+                            output_lines.append(f"Format/Info                              : {track.format_info}")
+                        
+                        # Commercial name
+                        if hasattr(track, 'commercial_name') and track.commercial_name:
+                            output_lines.append(f"Commercial name                          : {track.commercial_name}")
+                        
+                        # Codec ID
+                        if hasattr(track, 'codec_id') and track.codec_id:
+                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        
+                        # Duration
+                        if hasattr(track, 'duration') and track.duration:
+                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        
+                        # Bit rate mode
+                        if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
+                            output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
+                        
+                        # Bit rate
+                        if hasattr(track, 'bit_rate') and track.bit_rate:
+                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
+                        
+                        # Maximum bit rate
+                        if hasattr(track, 'bit_rate_maximum') and track.bit_rate_maximum:
+                            output_lines.append(f"Maximum bit rate                         : {get_readable_bitrate(track.bit_rate_maximum)}")
+                        
+                        # Channel(s)
+                        if hasattr(track, 'channel_s') and track.channel_s:
+                            output_lines.append(f"Channel(s)                               : {track.channel_s}")
+                        
+                        # Channel layout
+                        if hasattr(track, 'channel_layout') and track.channel_layout:
+                            output_lines.append(f"Channel layout                           : {track.channel_layout}")
+                        
+                        # Sampling rate
+                        if hasattr(track, 'sampling_rate') and track.sampling_rate:
+                            sr = float(track.sampling_rate)
+                            if sr >= 1000:
+                                output_lines.append(f"Sampling rate                            : {sr/1000:.1f} kHz")
+                            else:
+                                output_lines.append(f"Sampling rate                            : {sr:.0f} Hz")
+                        
+                        # Frame rate
+                        if hasattr(track, 'frame_rate') and track.frame_rate:
+                            output_lines.append(f"Frame rate                               : {track.frame_rate} FPS")
+                        
+                        # Compression mode
                         if hasattr(track, 'compression_mode') and track.compression_mode:
                             output_lines.append(f"Compression mode                         : {track.compression_mode}")
+                        
+                        # Stream size
+                        if hasattr(track, 'stream_size') and track.stream_size:
+                            stream_size = get_readable_bytes(track.stream_size)
+                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
+                                proportion = f"({track.stream_size_proportion})"
+                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
+                            else:
+                                output_lines.append(f"Stream size                              : {stream_size}")
+                        
+                        # Title
+                        if hasattr(track, 'title') and track.title:
+                            output_lines.append(f"Title                                    : {track.title}")
+                        
+                        # Language
+                        if hasattr(track, 'language') and track.language:
+                            output_lines.append(f"Language                                 : {track.language}")
+                        
+                        # Default
+                        if hasattr(track, 'default') and track.default is not None:
+                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        
+                        # Forced
+                        if hasattr(track, 'forced') and track.forced is not None:
+                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                    
+                    elif track.track_type == 'Text':
+                        text_count += 1
+                        if text_count == 1:
+                            output_lines.append("\nText")
+                        else:
+                            output_lines.append(f"\nText #{text_count}")
+                        
+                        # ID
+                        if hasattr(track, 'track_id') and track.track_id:
+                            output_lines.append(f"ID                                       : {track.track_id}")
+                        
+                        # Format
+                        if hasattr(track, 'format') and track.format:
+                            output_lines.append(f"Format                                   : {track.format}")
+                        
+                        # Codec ID
+                        if hasattr(track, 'codec_id') and track.codec_id:
+                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        
+                        # Codec ID/Info
+                        if hasattr(track, 'codec_id_info') and track.codec_id_info:
+                            output_lines.append(f"Codec ID/Info                            : {track.codec_id_info}")
+                        
+                        # Duration
+                        if hasattr(track, 'duration') and track.duration:
+                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        
+                        # Bit rate
+                        if hasattr(track, 'bit_rate') and track.bit_rate:
+                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
+                        
+                        # Frame rate
+                        if hasattr(track, 'frame_rate') and track.frame_rate:
+                            output_lines.append(f"Frame rate                               : {track.frame_rate} FPS")
+                        
+                        # Count of elements
+                        if hasattr(track, 'count_of_elements') and track.count_of_elements:
+                            output_lines.append(f"Count of elements                        : {track.count_of_elements}")
+                        
+                        # Stream size
+                        if hasattr(track, 'stream_size') and track.stream_size:
+                            stream_size = get_readable_bytes(track.stream_size)
+                            if hasattr(track, 'stream_size_proportion') and track.stream_size_proportion:
+                                proportion = f"({track.stream_size_proportion})"
+                                output_lines.append(f"Stream size                              : {stream_size} {proportion}")
+                            else:
+                                output_lines.append(f"Stream size                              : {stream_size}")
+                        
+                        # Title
+                        if hasattr(track, 'title') and track.title:
+                            output_lines.append(f"Title                                    : {track.title}")
+                        
+                        # Language
+                        if hasattr(track, 'language') and track.language:
+                            output_lines.append(f"Language                                 : {track.language}")
+                        
+                        # Default
+                        if hasattr(track, 'default') and track.default is not None:
+                            output_lines.append(f"Default                                  : {'Yes' if track.default else 'No'}")
+                        
+                        # Forced
+                        if hasattr(track, 'forced') and track.forced is not None:
+                            output_lines.append(f"Forced                                   : {'Yes' if track.forced else 'No'}")
+                    
+                    elif track.track_type == 'Menu':
+                        output_lines.append("\nMenu")
+                        
+                        # Add chapter information if available
+                        for attr_name in dir(track):
+                            if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
+                                attr_value = getattr(track, attr_name, None)
+                                if attr_value is not None and 'chapter' in str(attr_value).lower():
+                                    output_lines.append(f"{attr_name}                             : {attr_value}")
                 
                 return '\n'.join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
         
@@ -308,21 +545,18 @@ def mediainfo_api():
     except Exception as e:
         return jsonify({
             "error": f"Processing failed: {str(e)}",
-            "url": url,
-            "suggestion": "Check if the URL is accessible and points to a valid media file"
+            "url": url
         }), 500
 
 @app.route('/health')
 def health():
     """Health check endpoint"""
     try:
-        # Test MediaInfo installation
         from pymediainfo import MediaInfo
         return jsonify({
             "status": "healthy",
             "service": "mediainfo-api",
-            "mediainfo_available": True,
-            "version": "1.0"
+            "mediainfo_available": True
         })
     except Exception as e:
         return jsonify({
@@ -330,28 +564,6 @@ def health():
             "error": str(e),
             "mediainfo_available": False
         }), 500
-
-@app.route('/info')
-def info():
-    """API information endpoint"""
-    return jsonify({
-        "api_name": "MediaInfo API",
-        "version": "1.0",
-        "description": "Extract detailed media information from video and audio files",
-        "endpoints": {
-            "/": "Main MediaInfo analysis endpoint",
-            "/health": "Health check",
-            "/info": "API information"
-        },
-        "supported_url_types": [
-            "Direct download links",
-            "Google Drive links",
-            "HTTP/HTTPS URLs"
-        ],
-        "output_formats": ["json", "text"],
-        "max_sample_size": "10MB",
-        "deployment": "Render with Docker"
-    })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))

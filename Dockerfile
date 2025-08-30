@@ -1,58 +1,48 @@
 FROM ubuntu:20.04
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8 LANGUAGE=en_US:en TZ=Asia/Kolkata
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Update package list and install basic dependencies first
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
-    wget \
-    curl \
-    git \
-    software-properties-common \
-    apt-transport-https \
-    ca-certificates \
-    gnupg \
-    lsb-release \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update -y && apt-get upgrade -y
+RUN apt-get -y install wget ffmpeg python3-pip sox
 
-# Install multimedia libraries step by step
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# Install MediaArea repository and MediaInfo
+RUN wget https://mediaarea.net/repo/deb/repo-mediaarea_1.0-20_all.deb
+RUN dpkg -i repo-mediaarea_1.0-20_all.deb
+RUN apt-get update -y
+RUN apt-get -y install mediainfo megatools
 
-# Add MediaArea repository for MediaInfo
-RUN wget -qO- https://mediaarea.net/repo/deb/ubuntu/pubkey.gpg | apt-key add - \
-    && echo "deb https://mediaarea.net/repo/deb/ubuntu focal main" > /etc/apt/sources.list.d/mediaarea.list
+# Install Python dependencies
+RUN pip3 install --upgrade \
+    Flask==3.0.0 \
+    gunicorn==21.2.0 \
+    pymediainfo==6.1.0 \
+    requests==2.31.0 \
+    bs4 \
+    lxml \
+    google-api-python-client \
+    google-auth-httplib2 \
+    google-auth-oauthlib \
+    pycryptodomex \
+    pillow \
+    pyrogram \
+    tgcrypto \
+    python-dotenv \
+    m3u8
 
-# Install MediaInfo packages from official repository
-RUN apt-get update && apt-get install -y \
-    libzen0v5 \
-    libmediainfo0v5 \
-    libmediainfo-dev \
-    mediainfo \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set timezone
-RUN ln -snf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && echo Asia/Kolkata > /etc/timezone
-
-# Copy requirements and install Python packages
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# Copy application code
+# Copy application files
 COPY . .
+
+# Make start script executable (if you have one)
+RUN chmod +x start.sh || echo "No start.sh found, using direct command"
 
 # Expose port for Render
 EXPOSE 10000
 
-# Health check to verify MediaInfo installation
-RUN mediainfo --version || echo "MediaInfo installation check failed"
+# Verify MediaInfo installation
+RUN mediainfo --version
 
-# Start the application
+# Start command for Render (adjust based on your main Flask file)
 CMD ["python3", "-m", "gunicorn", "--bind", "0.0.0.0:10000", "--workers", "2", "app:app"]

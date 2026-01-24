@@ -66,17 +66,14 @@ def get_readable_bytes(size_bytes):
         return "Unknown"
 
 def get_readable_bitrate(bitrate_bps):
-    """Convert bitrate to MediaInfo format"""
+    """Convert bitrate to MediaInfo format (always kb/s)"""
     if not bitrate_bps:
         return "Unknown"
     try:
         bitrate_bps = float(bitrate_bps)
-        if bitrate_bps >= 1000000:
-            return f"{bitrate_bps/1000000:.1f} Mb/s"
-        elif bitrate_bps >= 1000:
-            return f"{bitrate_bps/1000:.0f} kb/s"
-        else:
-            return f"{bitrate_bps:.0f} b/s"
+        # Always display in kb/s to match MediaInfo standard
+        bitrate_kbps = bitrate_bps / 1000
+        return f"{bitrate_kbps:.0f} kb/s"
     except:
         return "Unknown"
 

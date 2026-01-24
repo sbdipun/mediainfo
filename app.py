@@ -319,6 +319,14 @@ def mediainfo_api():
                         # Writing library
                         if hasattr(track, 'writing_library') and track.writing_library:
                             output_lines.append(f"Writing library                          : {track.writing_library}")
+                        
+                        # ErrorDetectionType
+                        if hasattr(track, 'extra'):
+                            extra = track.extra
+                            if hasattr(extra, 'ErrorDetectionType') and extra.ErrorDetectionType:
+                                output_lines.append(f"ErrorDetectionType                       : {extra.ErrorDetectionType}")
+                            if hasattr(extra, 'FileExtension_Invalid') and extra.FileExtension_Invalid:
+                                output_lines.append(f"FileExtension_Invalid                    : {extra.FileExtension_Invalid}")
                     
                     elif track.track_type == 'Video':
                         output_lines.append("\nVideo")
@@ -397,6 +405,10 @@ def mediainfo_api():
                         if hasattr(track, 'bit_depth') and track.bit_depth:
                             output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
                         
+                        # Bits/(Pixel*Frame)
+                        if hasattr(track, 'bits__pixel_frame') and track.bits__pixel_frame:
+                            output_lines.append(f"Bits/(Pixel*Frame)                       : {track.bits__pixel_frame}")
+                        
                         # Scan type
                         if hasattr(track, 'scan_type') and track.scan_type:
                             output_lines.append(f"Scan type                                : {track.scan_type}")
@@ -406,6 +418,14 @@ def mediainfo_api():
                             stream_size = get_readable_bytes(track.stream_size)
                             output_lines.append(f"Stream size                              : {stream_size}")
                         
+                        # Writing library
+                        if hasattr(track, 'writing_library') and track.writing_library:
+                            output_lines.append(f"Writing library                          : {track.writing_library}")
+                        
+                        # Encoding settings
+                        if hasattr(track, 'encoding_settings') and track.encoding_settings:
+                            output_lines.append(f"Encoding settings                        : {track.encoding_settings}")
+                        
                         # Default and Forced (corrected)
                         default_line = format_boolean_field(track, 'default', 'Default')
                         if default_line:
@@ -414,6 +434,22 @@ def mediainfo_api():
                         forced_line = format_boolean_field(track, 'forced', 'Forced')
                         if forced_line:
                             output_lines.append(forced_line)
+                        
+                        # Color range
+                        if hasattr(track, 'color_range') and track.color_range:
+                            output_lines.append(f"Color range                              : {track.color_range}")
+                        
+                        # Color primaries
+                        if hasattr(track, 'color_primaries') and track.color_primaries:
+                            output_lines.append(f"Color primaries                          : {track.color_primaries}")
+                        
+                        # Transfer characteristics
+                        if hasattr(track, 'transfer_characteristics') and track.transfer_characteristics:
+                            output_lines.append(f"Transfer characteristics                 : {track.transfer_characteristics}")
+                        
+                        # Matrix coefficients
+                        if hasattr(track, 'matrix_coefficients') and track.matrix_coefficients:
+                            output_lines.append(f"Matrix coefficients                      : {track.matrix_coefficients}")
                     
                     elif track.track_type == 'Audio':
                         audio_count += 1
@@ -491,6 +527,10 @@ def mediainfo_api():
                         if hasattr(track, 'language') and track.language:
                             output_lines.append(f"Language                                 : {track.language}")
                         
+                        # Service kind
+                        if hasattr(track, 'service_kind') and track.service_kind:
+                            output_lines.append(f"Service kind                             : {track.service_kind}")
+                        
                         # Default and Forced (corrected)
                         default_line = format_boolean_field(track, 'default', 'Default')
                         if default_line:
@@ -499,6 +539,16 @@ def mediainfo_api():
                         forced_line = format_boolean_field(track, 'forced', 'Forced')
                         if forced_line:
                             output_lines.append(forced_line)
+                        
+                        # Dialog Normalization
+                        if hasattr(track, 'dialogue_normalization') and track.dialogue_normalization:
+                            output_lines.append(f"Dialog Normalization                     : {track.dialogue_normalization}")
+                        if hasattr(track, 'dialnorm_average') and track.dialnorm_average:
+                            output_lines.append(f"dialnorm_Average                         : {track.dialnorm_average}")
+                        if hasattr(track, 'dialnorm_minimum') and track.dialnorm_minimum:
+                            output_lines.append(f"dialnorm_Minimum                         : {track.dialnorm_minimum}")
+                        if hasattr(track, 'dialnorm_maximum') and track.dialnorm_maximum:
+                            output_lines.append(f"dialnorm_Maximum                         : {track.dialnorm_maximum}")
                     
                     elif track.track_type == 'Text':
                         text_count += 1
@@ -564,12 +614,40 @@ def mediainfo_api():
                     elif track.track_type == 'Menu':
                         output_lines.append("\nMenu")
                         
-                        # Add chapter information if available
-                        for attr_name in dir(track):
-                            if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
+                        # Add chapter information
+                        # Try to get chapter data from various possible attributes
+                        chapter_data = []
+                        
+                        # Check for common chapter attribute patterns
+                        for i in range(1, 100):  # Check up to 100 chapters
+                            # Try various naming conventions
+                            time_attr = f"_{i:02d}_00_00_000" if i < 10 else f"_{i}_00_00_000"
+                            
+                            for attr_name in dir(track):
+                                if attr_name.startswith('_'):
+                                    continue
+                                    
                                 attr_value = getattr(track, attr_name, None)
-                                if attr_value is not None and 'chapter' in str(attr_value).lower():
-                                    output_lines.append(f"{attr_name}                             : {attr_value}")
+                                if attr_value and str(i).zfill(2) in attr_name:
+                                    # Found a chapter entry
+                                    if ':' in str(attr_name) and '=' in str(attr_value):
+                                        chapter_data.append((attr_name, attr_value))
+                        
+                        # If we found chapter data, display it
+                        if chapter_data:
+                            for name, value in sorted(chapter_data):
+                                output_lines.append(f"{name}                             : {value}")
+                        else:
+                            # Fallback: display all menu-related attributes
+                            for attr_name in sorted(dir(track)):
+                                if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
+                                    attr_value = getattr(track, attr_name, None)
+                                    if attr_value is not None and attr_name not in ['track_type', 'track_id']:
+                                        # Format times as HH:MM:SS.mmm
+                                        if hasattr(track, attr_name.replace('_name', '')):
+                                            time_val = getattr(track, attr_name.replace('_name', ''), '')
+                                            if time_val and attr_name.endswith('_name'):
+                                                output_lines.append(f"{time_val}                             : :{attr_value}")
                 
                 return '\n'.join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
         

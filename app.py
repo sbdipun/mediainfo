@@ -341,22 +341,19 @@ def mediainfo_api():
                         if hasattr(track, 'overall_bit_rate_mode') and track.overall_bit_rate_mode:
                             output_lines.append(f"Overall bit rate mode                    : {track.overall_bit_rate_mode}")
                         
-                        # Overall bit rate - sum of all track bitrates (video + audio + text)
+                        # Overall bit rate - use MediaInfo value or calculate from file size
                         overall_bitrate = None
                         if hasattr(track, 'overall_bit_rate') and track.overall_bit_rate:
                             overall_bitrate = track.overall_bit_rate
-                        else:
-                            # Calculate by summing all track bitrates
-                            total_bitrate = 0
-                            for t in media_info.tracks:
-                                if t.track_type in ['Video', 'Audio', 'Text']:
-                                    if hasattr(t, 'bit_rate') and t.bit_rate:
-                                        try:
-                                            total_bitrate += float(t.bit_rate)
-                                        except:
-                                            pass
-                            if total_bitrate > 0:
-                                overall_bitrate = total_bitrate
+                        # Fallback: calculate from file size and duration
+                        elif content_length and hasattr(track, 'duration') and track.duration:
+                            try:
+                                file_size_bits = int(content_length) * 8
+                                duration_seconds = float(track.duration) / 1000
+                                if duration_seconds > 0:
+                                    overall_bitrate = file_size_bits / duration_seconds
+                            except:
+                                pass
                         
                         if overall_bitrate:
                             output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(overall_bitrate)}")
@@ -425,19 +422,23 @@ def mediainfo_api():
                         if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
                             output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
                         
-                        # Bit rate - calculate from stream size if available for accuracy
+                        # Bit rate - use MediaInfo value or calculate from stream size
                         video_bitrate = None
                         if hasattr(track, 'bit_rate') and track.bit_rate:
-                            video_bitrate = track.bit_rate
-                        # Calculate real bitrate from stream size if available
-                        elif hasattr(track, 'stream_size') and track.stream_size and hasattr(track, 'duration') and track.duration:
                             try:
-                                stream_size_bits = int(track.stream_size) * 8
-                                duration_seconds = float(track.duration) / 1000
-                                if duration_seconds > 0:
-                                    video_bitrate = stream_size_bits / duration_seconds
+                                video_bitrate = float(track.bit_rate)
                             except:
                                 pass
+                        # Calculate from stream size if bitrate not available or seems wrong
+                        if not video_bitrate or video_bitrate < 100:  # Suspiciously low
+                            if hasattr(track, 'stream_size') and track.stream_size and hasattr(track, 'duration') and track.duration:
+                                try:
+                                    stream_size_bits = int(track.stream_size) * 8
+                                    duration_seconds = float(track.duration) / 1000
+                                    if duration_seconds > 0:
+                                        video_bitrate = stream_size_bits / duration_seconds
+                                except:
+                                    pass
                         
                         if video_bitrate:
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(video_bitrate)}")
@@ -617,15 +618,21 @@ def mediainfo_api():
                         if forced_line:
                             output_lines.append(forced_line)
                         
-                        # Dialog Normalization
+                        # Dialog Normalization - add dB unit
                         if hasattr(track, 'dialogue_normalization') and track.dialogue_normalization:
-                            output_lines.append(f"Dialog Normalization                     : {track.dialogue_normalization}")
+                            dialval = str(track.dialogue_normalization)
+                            if not dialval.endswith('dB') and not dialval.endswith(' dB'):
+                                dialval = f"{dialval} dB"
+                            output_lines.append(f"Dialog Normalization                     : {dialval}")
                         if hasattr(track, 'dialnorm_average') and track.dialnorm_average:
-                            output_lines.append(f"dialnorm_Average                         : {track.dialnorm_average}")
+                            val = str(track.dialnorm_average)
+                            output_lines.append(f"dialnorm_Average                         : {val if 'dB' in val else val + ' dB'}")
                         if hasattr(track, 'dialnorm_minimum') and track.dialnorm_minimum:
-                            output_lines.append(f"dialnorm_Minimum                         : {track.dialnorm_minimum}")
+                            val = str(track.dialnorm_minimum)
+                            output_lines.append(f"dialnorm_Minimum                         : {val if 'dB' in val else val + ' dB'}")
                         if hasattr(track, 'dialnorm_maximum') and track.dialnorm_maximum:
-                            output_lines.append(f"dialnorm_Maximum                         : {track.dialnorm_maximum}")
+                            val = str(track.dialnorm_maximum)
+                            output_lines.append(f"dialnorm_Maximum                         : {val if 'dB' in val else val + ' dB'}")
                     
                     elif track.track_type == 'Text':
                         text_count += 1
@@ -693,30 +700,44 @@ def mediainfo_api():
                         output_lines.append("\nMenu")
                         
                         # Extract chapter information
-                        # MediaInfo stores chapters as numbered attributes like:
-                        # "00_00_00_000" (time) and corresponding chapter name
+                        # MediaInfo stores chapters as attributes like "00_00_00000" (HH_MM_SSmmm)
                         chapters = []
+                        
+                        # Filter out technical menu attributes
+                        skip_attrs = {
+                            'track_type', 'track_id', 'count', 'count_of_stream_of_this_kind',
+                            'kind_of_stream', 'other_kind_of_stream', 'stream_identifier',
+                            'chapters_pos_begin', 'chapters_pos_end'
+                        }
                         
                         # Get all attributes from the menu track
                         all_attrs = {}
                         for attr_name in dir(track):
                             if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
-                                attr_value = getattr(track, attr_name, None)
-                                if attr_value is not None and attr_name not in ['track_type', 'track_id']:
-                                    all_attrs[attr_name] = attr_value
+                                if attr_name.lower() not in skip_attrs:
+                                    attr_value = getattr(track, attr_name, None)
+                                    if attr_value is not None:
+                                        all_attrs[attr_name] = attr_value
                         
-                        # Look for chapter patterns -  attributes with timestamp format
-                        # Pattern: timestamps like "00_00_00_000" paired with chapter names
-                        timestamp_pattern = re.compile(r'^(\d{2}_\d{2}_\d{2}_\d{3})$')
+                        # Look for chapter patterns - timestamps like "00_00_00000" (HH_MM_SSmmm)
+                        timestamp_pattern = re.compile(r'^(\d{2}_\d{2}_\d{5})$')
                         
                         for attr_name, attr_value in sorted(all_attrs.items()):
                             # Check if attribute name is a timestamp
                             if timestamp_pattern.match(attr_name):
-                                # Convert timestamp format from "HH_MM_SS_mmm" to "HH:MM:SS.mmm"
+                                # Convert from "HH_MM_SSmmm" to "HH:MM:SS.mmm"
                                 parts = attr_name.split('_')
-                                if len(parts) == 4:
-                                    timestamp = f"{parts[0]}:{parts[1]}:{parts[2]}.{parts[3]}"
+                                if len(parts) == 3:  # HH, MM, SSmmm
+                                    hh = parts[0]
+                                    mm = parts[1]
+                                    ss_ms = parts[2]  # SSmmm format (5 digits)
+                                    ss = ss_ms[:2]
+                                    ms = ss_ms[2:]
+                                    timestamp = f"{hh}:{mm}:{ss}.{ms}"
+                                    # Extract chapter name, skip "en:" prefix if present
                                     chapter_name = str(attr_value) if attr_value else ""
+                                    if chapter_name.startswith('en:'):
+                                        chapter_name = chapter_name[3:]  # Remove "en:" prefix
                                     chapters.append((timestamp, chapter_name))
                         
                         # Display chapters
@@ -724,10 +745,6 @@ def mediainfo_api():
                             for timestamp, name in chapters:
                                 # Format: "HH:MM:SS.mmm                             : :Chapter Name"
                                 output_lines.append(f"{timestamp}                             : :{name}")
-                        else:
-                            # Fallback if no standard chapter format found - show all attributes
-                            for attr_name, attr_value in sorted(all_attrs.items()):
-                                output_lines.append(f"{attr_name}                             : {attr_value}")
                 
                 return '\n'.join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
         

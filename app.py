@@ -9,6 +9,93 @@ from pymediainfo import MediaInfo
 
 app = Flask(__name__, static_folder='.')
 
+# Language code to full name mapping
+LANGUAGE_MAP = {
+    'en': 'English',
+    'eng': 'English',
+    'fr': 'French',
+    'fra': 'French',
+    'fre': 'French',
+    'es': 'Spanish',
+    'spa': 'Spanish',
+    'pt': 'Portuguese',
+    'por': 'Portuguese',
+    'de': 'German',
+    'deu': 'German',
+    'ger': 'German',
+    'it': 'Italian',
+    'ita': 'Italian',
+    'ja': 'Japanese',
+    'jpn': 'Japanese',
+    'ko': 'Korean',
+    'kor': 'Korean',
+    'zh': 'Chinese',
+    'chi': 'Chinese',
+    'zho': 'Chinese',
+    'ru': 'Russian',
+    'rus': 'Russian',
+    'ar': 'Arabic',
+    'ara': 'Arabic',
+    'hi': 'Hindi',
+    'hin': 'Hindi',
+    'nl': 'Dutch',
+    'nld': 'Dutch',
+    'dut': 'Dutch',
+    'sv': 'Swedish',
+    'swe': 'Swedish',
+    'no': 'Norwegian',
+    'nor': 'Norwegian',
+    'da': 'Danish',
+    'dan': 'Danish',
+    'fi': 'Finnish',
+    'fin': 'Finnish',
+    'pl': 'Polish',
+    'pol': 'Polish',
+    'tr': 'Turkish',
+    'tur': 'Turkish',
+    'el': 'Greek',
+    'ell': 'Greek',
+    'gre': 'Greek',
+    'he': 'Hebrew',
+    'heb': 'Hebrew',
+    'cs': 'Czech',
+    'ces': 'Czech',
+    'cze': 'Czech',
+    'hu': 'Hungarian',
+    'hun': 'Hungarian',
+    'th': 'Thai',
+    'tha': 'Thai',
+    'vi': 'Vietnamese',
+    'vie': 'Vietnamese',
+    'id': 'Indonesian',
+    'ind': 'Indonesian',
+    'ms': 'Malay',
+    'msa': 'Malay',
+    'may': 'Malay',
+    'ro': 'Romanian',
+    'ron': 'Romanian',
+    'rum': 'Romanian',
+    'uk': 'Ukrainian',
+    'ukr': 'Ukrainian',
+    'bg': 'Bulgarian',
+    'bul': 'Bulgarian',
+    'hr': 'Croatian',
+    'hrv': 'Croatian',
+    'sr': 'Serbian',
+    'srp': 'Serbian',
+    'sk': 'Slovak',
+    'slk': 'Slovak',
+    'slo': 'Slovak',
+}
+
+def get_full_language_name(lang_code):
+    """Convert ISO language code to full language name"""
+    if not lang_code:
+        return None
+    lang_code_lower = str(lang_code).lower().strip()
+    return LANGUAGE_MAP.get(lang_code_lower, lang_code)  # Return original if not found
+
+
 def get_readable_bytes(size_bytes):
     """Convert bytes to human readable format"""
     if not size_bytes:
@@ -168,6 +255,28 @@ def download_sample(url, max_size=10*1024*1024):
         response = requests.get(url, headers=headers, stream=True, timeout=30)
         response.raise_for_status()
         
+        # Extract filename from Content-Disposition header
+        filename = None
+        content_disposition = response.headers.get('Content-Disposition', '')
+        if content_disposition:
+            # Try to extract filename from Content-Disposition header
+            # Format: attachment; filename="example.mkv" or filename*=UTF-8''example.mkv
+            import re
+            matches = re.findall(r'filename\*?=(?:UTF-8\'\')?["\']?([^"\';\r\n]+)', content_disposition)
+            if matches:
+                filename = unquote(matches[0].strip())
+        
+        # Fallback to URL parsing if Content-Disposition doesn't have filename
+        if not filename:
+            parsed_url = urlparse(original_url)  # Use original URL for better filename
+            filename = os.path.basename(parsed_url.path)
+            if filename:
+                filename = unquote(filename)
+        
+        # If still no good filename, use a generic name
+        if not filename or filename in ['direct.aspx', '']:
+            filename = 'media_file'
+        
         # Download sample
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.tmp')
         downloaded = 0
@@ -180,7 +289,7 @@ def download_sample(url, max_size=10*1024*1024):
                     break
         
         temp_file.close()
-        return temp_file.name, response.headers.get('content-length')
+        return temp_file.name, response.headers.get('content-length'), filename
         
     except Exception as e:
         raise Exception(f"Download failed: {str(e)}")
@@ -210,21 +319,12 @@ def mediainfo_api():
         })
     
     try:
-        # Download sample of the file
-        temp_path, content_length = download_sample(url)
+        # Download sample of the file (returns temp_path, content_length, filename)
+        temp_path, content_length, filename = download_sample(url)
         
         try:
             # Parse with MediaInfo
             media_info = MediaInfo.parse(temp_path)
-            
-            # Get filename from URL (use original URL for filename extraction)
-            parsed_url = urlparse(url)
-            filename = os.path.basename(parsed_url.path) or "media_file"
-            filename = unquote(filename)
-            
-            # If filename is generic from direct.aspx, try to get a better name
-            if filename in ['direct.aspx', 'media_file'] and is_gdrive_url(url):
-                filename = f"gdrive_file_{extract_gdrive_id(url)[:8]}"
             
             if output_format == 'json':
                 # Build JSON response
@@ -525,7 +625,8 @@ def mediainfo_api():
                         
                         # Language
                         if hasattr(track, 'language') and track.language:
-                            output_lines.append(f"Language                                 : {track.language}")
+                            lang_full = get_full_language_name(track.language) or track.language
+                            output_lines.append(f"Language                                 : {lang_full}")
                         
                         # Service kind
                         if hasattr(track, 'service_kind') and track.service_kind:
@@ -600,7 +701,8 @@ def mediainfo_api():
                         
                         # Language
                         if hasattr(track, 'language') and track.language:
-                            output_lines.append(f"Language                                 : {track.language}")
+                            lang_full = get_full_language_name(track.language) or track.language
+                            output_lines.append(f"Language                                 : {lang_full}")
                         
                         # Default and Forced (corrected)
                         default_line = format_boolean_field(track, 'default', 'Default')

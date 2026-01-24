@@ -155,6 +155,31 @@ def format_boolean_field(track, field_name, display_name):
     
     return None
 
+def get_field_value(track, field_name):
+    """
+    Get field value from track with fallback to other_* variant.
+    If primary field exists, return it.
+    If not, try other_{field_name} and return first element if it's a list.
+    """
+    # Try primary field first
+    if hasattr(track, field_name):
+        value = getattr(track, field_name)
+        if value is not None and value != '':
+            return value
+    
+    # Try other_* variant
+    other_field = f'other_{field_name}'
+    if hasattr(track, other_field):
+        other_value = getattr(track, other_field)
+        if other_value is not None:
+            # If it's a list, return the first element
+            if isinstance(other_value, list) and len(other_value) > 0:
+                return other_value[0]
+            elif other_value != '':
+                return other_value
+    
+    return None
+
 def is_gdrive_url(url):
     """Check if URL is a Google Drive link"""
     return "drive.google.com" in url or "docs.google.com" in url
@@ -314,37 +339,55 @@ def mediainfo_api():
                         output_lines.append("General")
                         
                         # Unique ID
-                        if hasattr(track, 'unique_id') and track.unique_id:
-                            output_lines.append(f"Unique ID                                : {track.unique_id}")
+                        unique_id = get_field_value(track, 'unique_id')
+                        if unique_id:
+                            output_lines.append(f"Unique ID                                : {unique_id}")
                         
                         # Complete name
-                        output_lines.append(f"Complete name                            : {filename}")
+                        complete_name = get_field_value(track, 'complete_name') or get_field_value(track, 'file_name')
+                        if complete_name:
+                            output_lines.append(f"Complete name                            : {complete_name}")
                         
                         # Format
-                        if hasattr(track, 'format') and track.format:
-                            output_lines.append(f"Format                                   : {track.format}")
+                        format_val = get_field_value(track, 'format')
+                        if format_val:
+                            output_lines.append(f"Format                                   : {format_val}")
                         
                         # Format version
-                        if hasattr(track, 'format_version') and track.format_version:
-                            output_lines.append(f"Format version                           : {track.format_version}")
+                        format_version = get_field_value(track, 'format_version')
+                        if format_version:
+                            output_lines.append(f"Format version                           : {format_version}")
                         
                         # File size
-                        file_size = content_length or getattr(track, 'file_size', None)
-                        if file_size:
-                            output_lines.append(f"File size                                : {get_readable_bytes(file_size)}")
+                        file_size_val = get_field_value(track, 'file_size')
+                        if file_size_val:
+                            # Use existing logic for file size if it's already bytes, otherwise handle string
+                            if isinstance(file_size_val, (int, float)) or (isinstance(file_size_val, str) and file_size_val.isdigit()):
+                                file_size = get_readable_bytes(file_size_val)
+                                if not content_length:
+                                    try:
+                                        content_length = int(file_size_val)
+                                    except:
+                                        pass
+                            else:
+                                file_size = str(file_size_val)
+                            output_lines.append(f"File size                                : {file_size}")
                         
                         # Duration
-                        if hasattr(track, 'duration') and track.duration:
-                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        duration = get_field_value(track, 'duration')
+                        if duration:
+                            output_lines.append(f"Duration                                 : {format_duration(duration)}")
                         
                         # Overall bit rate mode
-                        if hasattr(track, 'overall_bit_rate_mode') and track.overall_bit_rate_mode:
-                            output_lines.append(f"Overall bit rate mode                    : {track.overall_bit_rate_mode}")
+                        overall_bit_rate_mode = get_field_value(track, 'overall_bit_rate_mode')
+                        if overall_bit_rate_mode:
+                            output_lines.append(f"Overall bit rate mode                    : {overall_bit_rate_mode}")
                         
                         # Overall bit rate - use MediaInfo value or calculate from file size
                         overall_bitrate = None
-                        if hasattr(track, 'overall_bit_rate') and track.overall_bit_rate:
-                            overall_bitrate = track.overall_bit_rate
+                        track_bitrate = get_field_value(track, 'overall_bit_rate')
+                        if track_bitrate:
+                            overall_bitrate = track_bitrate
                         # Fallback: calculate from file size and duration
                         elif content_length and hasattr(track, 'duration') and track.duration:
                             try:
@@ -360,40 +403,49 @@ def mediainfo_api():
 
                         
                         # Frame rate (if available at container level)
-                        if hasattr(track, 'frame_rate') and track.frame_rate:
-                            output_lines.append(f"Frame rate                               : {format_frame_rate(track.frame_rate)}")
+                        frame_rate = get_field_value(track, 'frame_rate')
+                        if frame_rate:
+                            output_lines.append(f"Frame rate                               : {format_frame_rate(frame_rate)}")
                         
                         # Movie name (alternative title)
-                        if hasattr(track, 'movie_name') and track.movie_name:
-                            output_lines.append(f"Movie name                               : {track.movie_name}")
+                        movie_name = get_field_value(track, 'movie_name')
+                        if movie_name:
+                            output_lines.append(f"Movie name                               : {movie_name}")
                         
                         # Encoded date
-                        if hasattr(track, 'encoded_date') and track.encoded_date:
-                            output_lines.append(f"Encoded date                             : {track.encoded_date}")
+                        encoded_date = get_field_value(track, 'encoded_date')
+                        if encoded_date:
+                            output_lines.append(f"Encoded date                             : {encoded_date}")
                         
                         # Writing application
-                        if hasattr(track, 'writing_application') and track.writing_application:
-                            output_lines.append(f"Writing application                      : {track.writing_application}")
+                        writing_application = get_field_value(track, 'writing_application')
+                        if writing_application:
+                            output_lines.append(f"Writing application                      : {writing_application}")
                         
                         # Writing library
-                        if hasattr(track, 'writing_library') and track.writing_library:
-                            output_lines.append(f"Writing library                          : {track.writing_library}")
+                        writing_library = get_field_value(track, 'writing_library')
+                        if writing_library:
+                            output_lines.append(f"Writing library                          : {writing_library}")
                         
                         # Cover (attachment indicator)
-                        if hasattr(track, 'cover') and track.cover:
-                            output_lines.append(f"Cover                                    : {track.cover}")
+                        cover = get_field_value(track, 'cover')
+                        if cover:
+                            output_lines.append(f"Cover                                    : {cover}")
                         
                         # Cover description
-                        if hasattr(track, 'cover_description') and track.cover_description:
-                            output_lines.append(f"Cover description                        : {track.cover_description}")
+                        cover_desc = get_field_value(track, 'cover_description')
+                        if cover_desc:
+                            output_lines.append(f"Cover description                        : {cover_desc}")
                         
                         # Cover type
-                        if hasattr(track, 'cover_type') and track.cover_type:
-                            output_lines.append(f"Cover type                               : {track.cover_type}")
+                        cover_type = get_field_value(track, 'cover_type')
+                        if cover_type:
+                            output_lines.append(f"Cover type                               : {cover_type}")
                         
                         # Attachments
-                        if hasattr(track, 'attachments') and track.attachments:
-                            output_lines.append(f"Attachments                              : {track.attachments}")
+                        attachments = get_field_value(track, 'attachments')
+                        if attachments:
+                            output_lines.append(f"Attachments                              : {attachments}")
                         
                         # ErrorDetectionType
                         if hasattr(track, 'extra'):
@@ -407,66 +459,82 @@ def mediainfo_api():
                         output_lines.append("\nVideo")
                         
                         # ID
-                        if hasattr(track, 'track_id') and track.track_id:
-                            output_lines.append(f"ID                                       : {track.track_id}")
+                        track_id = get_field_value(track, 'track_id')
+                        if track_id:
+                            output_lines.append(f"ID                                       : {track_id}")
                         
                         # Format
-                        if hasattr(track, 'format') and track.format:
-                            output_lines.append(f"Format                                   : {track.format}")
+                        format_val = get_field_value(track, 'format')
+                        if format_val:
+                            output_lines.append(f"Format                                   : {format_val}")
                         
                         # Format/Info
-                        if hasattr(track, 'format_info') and track.format_info:
-                            output_lines.append(f"Format/Info                              : {track.format_info}")
+                        format_info = get_field_value(track, 'format_info')
+                        if format_info:
+                            output_lines.append(f"Format/Info                              : {format_info}")
                         
                         # Format profile
-                        if hasattr(track, 'format_profile') and track.format_profile:
-                            output_lines.append(f"Format profile                           : {track.format_profile}")
+                        format_profile = get_field_value(track, 'format_profile')
+                        if format_profile:
+                            output_lines.append(f"Format profile                           : {format_profile}")
                         
                         # Format settings (Muxing mode may be included here)
-                        if hasattr(track, 'muxing_mode') and track.muxing_mode:
-                            output_lines.append(f"Muxing mode                              : {track.muxing_mode}")
+                        muxing_mode = get_field_value(track, 'muxing_mode')
+                        if muxing_mode:
+                            output_lines.append(f"Muxing mode                              : {muxing_mode}")
                         
                         # Format settings
-                        if hasattr(track, 'format_settings') and track.format_settings:
-                            output_lines.append(f"Format settings                          : {track.format_settings}")
+                        format_settings = get_field_value(track, 'format_settings')
+                        if format_settings:
+                            output_lines.append(f"Format settings                          : {format_settings}")
                         
                         # Format settings, CABAC
-                        if hasattr(track, 'format_settings__cabac') and track.format_settings__cabac:
-                            output_lines.append(f"Format settings, CABAC                   : {track.format_settings__cabac}")
+                        format_cabac = get_field_value(track, 'format_settings__cabac')
+                        if format_cabac:
+                            output_lines.append(f"Format settings, CABAC                   : {format_cabac}")
                         
                         # Format settings, Reference frames
-                        if hasattr(track, 'format_settings__reference_frames') and track.format_settings__reference_frames:
-                            output_lines.append(f"Format settings, Reference frames        : {track.format_settings__reference_frames}")
+                        ref_frames = get_field_value(track, 'format_settings__reference_frames')
+                        if ref_frames:
+                            output_lines.append(f"Format settings, Reference frames        : {ref_frames}")
                         
                         # Format settings, Slice count
-                        if hasattr(track, 'format_settings__slice_count') and track.format_settings__slice_count:
-                            output_lines.append(f"Format settings, Slice count             : {track.format_settings__slice_count}")
+                        slice_count = get_field_value(track, 'format_settings__slice_count')
+                        if slice_count:
+                            output_lines.append(f"Format settings, Slice count             : {slice_count}")
                         
                         # Codec ID
-                        if hasattr(track, 'codec_id') and track.codec_id:
-                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        codec_id = get_field_value(track, 'codec_id')
+                        if codec_id:
+                            output_lines.append(f"Codec ID                                 : {codec_id}")
                         
                         # Duration
-                        if hasattr(track, 'duration') and track.duration:
-                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        duration = get_field_value(track, 'duration')
+                        if duration:
+                            output_lines.append(f"Duration                                 : {format_duration(duration)}")
                         
                         # Bit rate mode
-                        if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
-                            output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
+                        bit_rate_mode = get_field_value(track, 'bit_rate_mode')
+                        if bit_rate_mode:
+                            output_lines.append(f"Bit rate mode                            : {bit_rate_mode}")
                         
                         # Bit rate - use MediaInfo value or calculate from stream size
                         video_bitrate = None
-                        if hasattr(track, 'bit_rate') and track.bit_rate:
+                        bit_rate = get_field_value(track, 'bit_rate')
+                        if bit_rate:
                             try:
-                                video_bitrate = float(track.bit_rate)
+                                video_bitrate = float(bit_rate)
                             except:
                                 pass
                         # Calculate from stream size if bitrate not available or seems wrong
                         if not video_bitrate or video_bitrate < 100:  # Suspiciously low
-                            if hasattr(track, 'stream_size') and track.stream_size and hasattr(track, 'duration') and track.duration:
+                            stream_size = get_field_value(track, 'stream_size')
+                            duration_val = get_field_value(track, 'duration')
+                            
+                            if stream_size and duration_val:
                                 try:
-                                    stream_size_bits = int(track.stream_size) * 8
-                                    duration_seconds = float(track.duration) / 1000
+                                    stream_size_bits = int(stream_size) * 8
+                                    duration_seconds = float(duration_val) / 1000
                                     if duration_seconds > 0:
                                         video_bitrate = stream_size_bits / duration_seconds
                                 except:
@@ -476,77 +544,112 @@ def mediainfo_api():
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(video_bitrate)}")
                         
                         # Nominal bit rate
-                        if hasattr(track, 'nominal_bit_rate') and track.nominal_bit_rate:
-                            output_lines.append(f"Nominal bit rate                         : {get_readable_bitrate(track.nominal_bit_rate)}")
+                        nominal_bit_rate = get_field_value(track, 'nominal_bit_rate')
+                        if nominal_bit_rate:
+                            output_lines.append(f"Nominal bit rate                         : {get_readable_bitrate(nominal_bit_rate)}")
 
                         
                         # Dimensions
-                        if hasattr(track, 'width') and hasattr(track, 'height') and track.width and track.height:
-                            width_str, height_str = format_pixel_dimensions(track.width, track.height)
+                        width = get_field_value(track, 'width')
+                        height = get_field_value(track, 'height')
+                        
+                        if width and height:
+                            width_str, height_str = format_pixel_dimensions(width, height)
                             output_lines.append(f"Width                                    : {width_str} pixels")
                             output_lines.append(f"Height                                   : {height_str} pixels")
                         
                         # Display aspect ratio
-                        if hasattr(track, 'display_aspect_ratio') and track.display_aspect_ratio:
-                            output_lines.append(f"Display aspect ratio                     : {track.display_aspect_ratio}")
-                        elif hasattr(track, 'width') and hasattr(track, 'height') and track.width and track.height:
+                        display_aspect_ratio = get_field_value(track, 'display_aspect_ratio')
+                        if display_aspect_ratio:
+                            output_lines.append(f"Display aspect ratio                     : {display_aspect_ratio}")
+                        elif width and height:
                             # Calculate aspect ratio
-                            width, height = int(track.width), int(track.height)
-                            if width == 1920 and height == 1080:
-                                output_lines.append(f"Display aspect ratio                     : 16:9")
-                            else:
-                                ratio = width / height
-                                output_lines.append(f"Display aspect ratio                     : {ratio:.3f}")
+                            try:
+                                w, h = int(width), int(height)
+                                if w == 1920 and h == 1080:
+                                    output_lines.append(f"Display aspect ratio                     : 16:9")
+                                else:
+                                    ratio = w / h
+                                    output_lines.append(f"Display aspect ratio                     : {ratio:.3f}")
+                            except:
+                                pass
                         
                         # Frame rate mode
-                        if hasattr(track, 'frame_rate_mode') and track.frame_rate_mode:
-                            output_lines.append(f"Frame rate mode                          : {track.frame_rate_mode}")
+                        frame_rate_mode = get_field_value(track, 'frame_rate_mode')
+                        if frame_rate_mode:
+                            output_lines.append(f"Frame rate mode                          : {frame_rate_mode}")
                         
                         # Frame rate
-                        if hasattr(track, 'frame_rate') and track.frame_rate:
-                            output_lines.append(f"Frame rate                               : {format_frame_rate(track.frame_rate)}")
+                        frame_rate = get_field_value(track, 'frame_rate')
+                        if frame_rate:
+                            output_lines.append(f"Frame rate                               : {format_frame_rate(frame_rate)}")
                         
                         # Color space
-                        if hasattr(track, 'color_space') and track.color_space:
-                            output_lines.append(f"Color space                              : {track.color_space}")
+                        color_space = get_field_value(track, 'color_space')
+                        if color_space:
+                            output_lines.append(f"Color space                              : {color_space}")
                         
                         # Chroma subsampling
-                        if hasattr(track, 'chroma_subsampling') and track.chroma_subsampling:
-                            output_lines.append(f"Chroma subsampling                       : {track.chroma_subsampling}")
+                        chroma_subsampling = get_field_value(track, 'chroma_subsampling')
+                        if chroma_subsampling:
+                            output_lines.append(f"Chroma subsampling                       : {chroma_subsampling}")
                         
                         # Bit depth
-                        if hasattr(track, 'bit_depth') and track.bit_depth:
-                            output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
-                        
-                        # Bits/(Pixel*Frame)
-                        if hasattr(track, 'bits__pixel_frame') and track.bits__pixel_frame:
-                            output_lines.append(f"Bits/(Pixel*Frame)                       : {track.bits__pixel_frame}")
+                        bit_depth = get_field_value(track, 'bit_depth')
+                        if bit_depth:
+                            output_lines.append(f"Bit depth                                : {bit_depth} bits")
                         
                         # Scan type
-                        if hasattr(track, 'scan_type') and track.scan_type:
-                            output_lines.append(f"Scan type                                : {track.scan_type}")
+                        scan_type = get_field_value(track, 'scan_type')
+                        if scan_type:
+                            output_lines.append(f"Scan type                                : {scan_type}")
                         
+                        # Bits/(Pixel*Frame) - Calculate this
+                        if video_bitrate and width and height and frame_rate:
+                            try:
+                                w = float(width)
+                                h = float(height)
+                                fr_str = format_frame_rate(frame_rate)
+                                # Extract number from "23.976 (24000/1001) FPS" -> 23.976
+                                import re
+                                match = re.search(r"([\d\.]+)", fr_str)
+                                if match:
+                                    fr = float(match.group(1))
+                                    if fr > 0:
+                                        bpp = video_bitrate / (w * h * fr)
+                                        output_lines.append(f"Bits/(Pixel*Frame)                   : {bpp:.3f}")
+                            except:
+                                pass
+
+                        # Time code of first frame
+                        time_code = get_field_value(track, 'time_code_of_first_frame')
+                        if time_code:
+                            output_lines.append(f"Time code of first frame                 : {time_code}")
+                            
                         # Stream size (with percentage if file size available)
-                        if hasattr(track, 'stream_size') and track.stream_size:
-                            stream_size = get_readable_bytes(track.stream_size)
+                        stream_size = get_field_value(track, 'stream_size')
+                        if stream_size:
+                            stream_size_str = get_readable_bytes(stream_size)
                             percentage_str = ""
                             if content_length:
                                 try:
-                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage = (int(stream_size) / int(content_length)) * 100
                                     percentage_str = f" ({percentage:.0f}%)"
                                 except:
                                     pass
-                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
+                            output_lines.append(f"Stream size                              : {stream_size_str}{percentage_str}")
                         
                         # Writing library
-                        if hasattr(track, 'writing_library') and track.writing_library:
-                            output_lines.append(f"Writing library                          : {track.writing_library}")
+                        writing_library = get_field_value(track, 'writing_library')
+                        if writing_library:
+                            output_lines.append(f"Writing library                          : {writing_library}")
                         
                         # Encoding settings
-                        if hasattr(track, 'encoding_settings') and track.encoding_settings:
-                            output_lines.append(f"Encoding settings                        : {track.encoding_settings}")
+                        encoding_settings = get_field_value(track, 'encoding_settings')
+                        if encoding_settings:
+                            output_lines.append(f"Encoding settings                        : {encoding_settings}")
                         
-                        # Default and Forced (corrected)
+                        # Default and Forced
                         default_line = format_boolean_field(track, 'default', 'Default')
                         if default_line:
                             output_lines.append(default_line)
@@ -556,20 +659,24 @@ def mediainfo_api():
                             output_lines.append(forced_line)
                         
                         # Color range
-                        if hasattr(track, 'color_range') and track.color_range:
-                            output_lines.append(f"Color range                              : {track.color_range}")
+                        color_range = get_field_value(track, 'color_range')
+                        if color_range:
+                            output_lines.append(f"Color range                              : {color_range}")
                         
                         # Color primaries
-                        if hasattr(track, 'color_primaries') and track.color_primaries:
-                            output_lines.append(f"Color primaries                          : {track.color_primaries}")
+                        color_primaries = get_field_value(track, 'color_primaries')
+                        if color_primaries:
+                            output_lines.append(f"Color primaries                          : {color_primaries}")
                         
                         # Transfer characteristics
-                        if hasattr(track, 'transfer_characteristics') and track.transfer_characteristics:
-                            output_lines.append(f"Transfer characteristics                 : {track.transfer_characteristics}")
+                        transfer_characteristics = get_field_value(track, 'transfer_characteristics')
+                        if transfer_characteristics:
+                            output_lines.append(f"Transfer characteristics                 : {transfer_characteristics}")
                         
                         # Matrix coefficients
-                        if hasattr(track, 'matrix_coefficients') and track.matrix_coefficients:
-                            output_lines.append(f"Matrix coefficients                      : {track.matrix_coefficients}")
+                        matrix_coefficients = get_field_value(track, 'matrix_coefficients')
+                        if matrix_coefficients:
+                            output_lines.append(f"Matrix coefficients                      : {matrix_coefficients}")
                     
                     elif track.track_type == 'Audio':
                         audio_count += 1
@@ -579,112 +686,158 @@ def mediainfo_api():
                             output_lines.append(f"\nAudio #{audio_count}")
                         
                         # ID
-                        if hasattr(track, 'track_id') and track.track_id:
-                            output_lines.append(f"ID                                       : {track.track_id}")
+                        track_id = get_field_value(track, 'track_id')
+                        if track_id:
+                            output_lines.append(f"ID                                       : {track_id}")
+                        
+                        # ID in the original source medium
+                        original_source_medium_id = get_field_value(track, 'original_source_medium_id')
+                        if original_source_medium_id:
+                            output_lines.append(f"ID in the original source medium         : {original_source_medium_id}")
                         
                         # Format
-                        if hasattr(track, 'format') and track.format:
-                            output_lines.append(f"Format                                   : {track.format}")
+                        format_val = get_field_value(track, 'format')
+                        if format_val:
+                            output_lines.append(f"Format                                   : {format_val}")
                         
                         # Format/Info
-                        if hasattr(track, 'format_info') and track.format_info:
-                            output_lines.append(f"Format/Info                              : {track.format_info}")
+                        format_info = get_field_value(track, 'format_info')
+                        if format_info:
+                            output_lines.append(f"Format/Info                              : {format_info}")
                         
                         # Commercial name
-                        if hasattr(track, 'commercial_name') and track.commercial_name:
-                            output_lines.append(f"Commercial name                          : {track.commercial_name}")
+                        commercial_name = get_field_value(track, 'commercial_name')
+                        if commercial_name:
+                            output_lines.append(f"Commercial name                          : {commercial_name}")
                         
-                        # Format settings (PRIORITY - user requested)
-                        if hasattr(track, 'format_settings') and track.format_settings:
-                            output_lines.append(f"Format settings                          : {track.format_settings}")
+                        # Format settings
+                        format_settings = get_field_value(track, 'format_settings')
+                        if format_settings:
+                            output_lines.append(f"Format settings                          : {format_settings}")
                         
                         # Codec ID
-                        if hasattr(track, 'codec_id') and track.codec_id:
-                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        codec_id = get_field_value(track, 'codec_id')
+                        if codec_id:
+                            output_lines.append(f"Codec ID                                 : {codec_id}")
                         
                         # Duration
-                        if hasattr(track, 'duration') and track.duration:
-                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        duration = get_field_value(track, 'duration')
+                        if duration:
+                            output_lines.append(f"Duration                                 : {format_duration(duration)}")
                         
                         # Bit rate mode
-                        if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
-                            output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
+                        bit_rate_mode = get_field_value(track, 'bit_rate_mode')
+                        if bit_rate_mode:
+                            output_lines.append(f"Bit rate mode                            : {bit_rate_mode}")
                         
                         # Bit rate
-                        if hasattr(track, 'bit_rate') and track.bit_rate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
+                        bit_rate = get_field_value(track, 'bit_rate')
+                        if bit_rate:
+                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(bit_rate)}")
                         
                         # Channel(s)
-                        if hasattr(track, 'channel_s') and track.channel_s:
-                            output_lines.append(f"Channel(s)                               : {track.channel_s}")
+                        channels = get_field_value(track, 'channel_s')
+                        if channels:
+                            output_lines.append(f"Channel(s)                               : {channels}")
                         
                         # Channel layout
-                        if hasattr(track, 'channel_layout') and track.channel_layout:
-                            output_lines.append(f"Channel layout                           : {track.channel_layout}")
+                        channel_layout = get_field_value(track, 'channel_layout')
+                        if channel_layout:
+                            output_lines.append(f"Channel layout                           : {channel_layout}")
                         
                         # Sampling rate
-                        if hasattr(track, 'sampling_rate') and track.sampling_rate:
-                            sr = float(track.sampling_rate)
-                            if sr >= 1000:
-                                output_lines.append(f"Sampling rate                            : {sr/1000:.1f} kHz")
-                            else:
-                                output_lines.append(f"Sampling rate                            : {sr:.0f} Hz")
+                        sampling_rate = get_field_value(track, 'sampling_rate')
+                        if sampling_rate:
+                            try:
+                                sr = float(sampling_rate)
+                                if sr >= 1000:
+                                    output_lines.append(f"Sampling rate                            : {sr/1000:.1f} kHz")
+                                else:
+                                    output_lines.append(f"Sampling rate                            : {sr:.0f} Hz")
+                            except:
+                                output_lines.append(f"Sampling rate                            : {sampling_rate}")
                         
                         # Frame rate (with SPF if available)
-                        if hasattr(track, 'frame_rate') and track.frame_rate:
-                            fr_str = f"{track.frame_rate} FPS"
+                        frame_rate = get_field_value(track, 'frame_rate')
+                        if frame_rate:
+                            fr_str = f"{frame_rate} FPS"
                             # Add SPF (Samples Per Frame) if we have sampling rate
-                            if hasattr(track, 'sampling_rate') and track.sampling_rate:
+                            if sampling_rate:
                                 try:
-                                    spf = int(float(track.sampling_rate) / float(track.frame_rate))
+                                    spf = int(float(sampling_rate) / float(frame_rate))
                                     fr_str += f" ({spf} SPF)"
                                 except:
                                     pass
                             output_lines.append(f"Frame rate                               : {fr_str}")
                         
                         # Bit depth
-                        if hasattr(track, 'bit_depth') and track.bit_depth:
-                            output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
+                        bit_depth = get_field_value(track, 'bit_depth')
+                        if bit_depth:
+                            output_lines.append(f"Bit depth                                : {bit_depth} bits")
                         
                         # Compression mode
-                        if hasattr(track, 'compression_mode') and track.compression_mode:
-                            output_lines.append(f"Compression mode                         : {track.compression_mode}")
+                        compression_mode = get_field_value(track, 'compression_mode')
+                        if compression_mode:
+                            output_lines.append(f"Compression mode                         : {compression_mode}")
+                        
+                        # Number of dynamic objects (object-based audio)
+                        num_dynamic_objects = get_field_value(track, 'number_of_dynamic_objects')
+                        if num_dynamic_objects:
+                            output_lines.append(f"Number of dynamic objects                : {num_dynamic_objects}")
+                        
+                        # Bed channel count (object-based audio)
+                        bed_channel_count = get_field_value(track, 'bed_channel_count')
+                        if bed_channel_count:
+                            output_lines.append(f"Bed channel count                        : {bed_channel_count}")
+                        
+                        # Bed channel configuration (object-based audio)
+                        bed_channel_config = get_field_value(track, 'bed_channel_configuration')
+                        if bed_channel_config:
+                            output_lines.append(f"Bed channel configuration                : {bed_channel_config}")
                         
                         # Delay relative to video
-                        if hasattr(track, 'delay_relative_to_video') and track.delay_relative_to_video:
-                            delay_val = track.delay_relative_to_video
+                        delay_relative_to_video = get_field_value(track, 'delay_relative_to_video')
+                        if delay_relative_to_video:
+                            # Try to parse numeric value
                             try:
-                                delay_ms = int(delay_val)
+                                # Sometimes it's like "12 ms" or just "12"
+                                delay_val = str(delay_relative_to_video).lower().replace('ms', '').strip()
+                                delay_ms = int(float(delay_val))
                                 output_lines.append(f"Delay relative to video                  : {delay_ms} ms")
                             except:
-                                output_lines.append(f"Delay relative to video                  : {delay_val}")
+                                output_lines.append(f"Delay relative to video                  : {delay_relative_to_video}")
                         
                         # Stream size (with percentage if file size available)
-                        if hasattr(track, 'stream_size') and track.stream_size:
-                            stream_size = get_readable_bytes(track.stream_size)
+                        stream_size = get_field_value(track, 'stream_size')
+                        if stream_size:
+                            stream_size_str = get_readable_bytes(stream_size)
                             percentage_str = ""
                             if content_length:
                                 try:
-                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage = (int(stream_size) / int(content_length)) * 100
                                     percentage_str = f" ({percentage:.0f}%)"
                                 except:
                                     pass
-                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
+                            output_lines.append(f"Stream size                              : {stream_size_str}{percentage_str}")
                         
                         # Title
-                        if hasattr(track, 'title') and track.title:
-                            output_lines.append(f"Title                                    : {track.title}")
+                        title = get_field_value(track, 'title')
+                        if title:
+                            output_lines.append(f"Title                                    : {title}")
                         
                         # Language
-                        if hasattr(track, 'language') and track.language:
-                            lang_full = get_full_language_name(track.language) or track.language
+                        language = get_field_value(track, 'language')
+                        if language:
+                            # Try to get full language name if it's a code
+                            lang_full = get_full_language_name(language) or language
                             output_lines.append(f"Language                                 : {lang_full}")
                         
                         # Service kind
-                        if hasattr(track, 'service_kind') and track.service_kind:
-                            output_lines.append(f"Service kind                             : {track.service_kind}")
+                        service_kind = get_field_value(track, 'service_kind')
+                        if service_kind:
+                            output_lines.append(f"Service kind                             : {service_kind}")
                         
-                        # Default and Forced (corrected)
+                        # Default and Forced
                         default_line = format_boolean_field(track, 'default', 'Default')
                         if default_line:
                             output_lines.append(default_line)
@@ -694,40 +847,57 @@ def mediainfo_api():
                             output_lines.append(forced_line)
                         
                         # Original source medium
-                        if hasattr(track, 'original_source_medium') and track.original_source_medium:
-                            output_lines.append(f"Original source medium                   : {track.original_source_medium}")
+                        original_source_medium = get_field_value(track, 'original_source_medium')
+                        if original_source_medium:
+                            output_lines.append(f"Original source medium                   : {original_source_medium}")
                         
                         # Dialog Normalization - add dB unit
-                        if hasattr(track, 'dialogue_normalization') and track.dialogue_normalization:
-                            dialval = str(track.dialogue_normalization)
+                        dialogue_normalization = get_field_value(track, 'dialogue_normalization')
+                        if dialogue_normalization:
+                            dialval = str(dialogue_normalization)
                             if not dialval.endswith('dB') and not dialval.endswith(' dB'):
                                 dialval = f"{dialval} dB"
                             output_lines.append(f"Dialog Normalization                     : {dialval}")
                         
                         # Compression parameters (AC-3/EAC-3)
-                        if hasattr(track, 'compr') and track.compr:
-                            val = str(track.compr)
+                        compr = get_field_value(track, 'compr')
+                        if compr:
+                            val = str(compr)
                             output_lines.append(f"compr                                    : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'dynrng') and track.dynrng:
-                            val = str(track.dynrng)
+                            
+                        dynrng = get_field_value(track, 'dynrng')
+                        if dynrng:
+                            val = str(dynrng)
                             output_lines.append(f"dynrng                                   : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'cmixlev') and track.cmixlev:
-                            val = str(track.cmixlev)
+                            
+                        cmixlev = get_field_value(track, 'cmixlev')
+                        if cmixlev:
+                            val = str(cmixlev)
                             output_lines.append(f"cmixlev                                  : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'surmixlev') and track.surmixlev:
-                            val = str(track.surmixlev)
+                            
+                        surmixlev = get_field_value(track, 'surmixlev')
+                        if surmixlev:
+                            val = str(surmixlev)
                             output_lines.append(f"surmixlev                                : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'ltrtcmixlev') and track.ltrtcmixlev:
-                            val = str(track.ltrtcmixlev)
+                            
+                        ltrtcmixlev = get_field_value(track, 'ltrtcmixlev')
+                        if ltrtcmixlev:
+                            val = str(ltrtcmixlev)
                             output_lines.append(f"ltrtcmixlev                              : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'ltrtsurmixlev') and track.ltrtsurmixlev:
-                            val = str(track.ltrtsurmixlev)
+                            
+                        ltrtsurmixlev = get_field_value(track, 'ltrtsurmixlev')
+                        if ltrtsurmixlev:
+                            val = str(ltrtsurmixlev)
                             output_lines.append(f"ltrtsurmixlev                            : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'lorocmixlev') and track.lorocmixlev:
-                            val = str(track.lorocmixlev)
+                            
+                        lorocmixlev = get_field_value(track, 'lorocmixlev')
+                        if lorocmixlev:
+                            val = str(lorocmixlev)
                             output_lines.append(f"lorocmixlev                              : {val if 'dB' in val else val + ' dB'}")
-                        if hasattr(track, 'lorosurmixlev') and track.lorosurmixlev:
-                            val = str(track.lorosurmixlev)
+                            
+                        lorosurmixlev = get_field_value(track, 'lorosurmixlev')
+                        if lorosurmixlev:
+                            val = str(lorosurmixlev)
                             output_lines.append(f"lorosurmixlev                            : {val if 'dB' in val else val + ' dB'}")
                         
                         # Dialog normalization statistics
@@ -749,63 +919,81 @@ def mediainfo_api():
                             output_lines.append(f"\nText #{text_count}")
                         
                         # ID
-                        if hasattr(track, 'track_id') and track.track_id:
-                            output_lines.append(f"ID                                       : {track.track_id}")
+                        track_id = get_field_value(track, 'track_id')
+                        if track_id:
+                            output_lines.append(f"ID                                       : {track_id}")
                         
                         # Format
-                        if hasattr(track, 'format') and track.format:
-                            output_lines.append(f"Format                                   : {track.format}")
+                        format_val = get_field_value(track, 'format')
+                        if format_val:
+                            output_lines.append(f"Format                                   : {format_val}")
+                        
+                        # Format/Info
+                        format_info = get_field_value(track, 'format_info')
+                        if format_info:
+                            output_lines.append(f"Format/Info                              : {format_info}")
                         
                         # Muxing mode
-                        if hasattr(track, 'muxing_mode') and track.muxing_mode:
-                            output_lines.append(f"Muxing mode                              : {track.muxing_mode}")
+                        muxing_mode = get_field_value(track, 'muxing_mode')
+                        if muxing_mode:
+                            output_lines.append(f"Muxing mode                              : {muxing_mode}")
                         
                         # Codec ID
-                        if hasattr(track, 'codec_id') and track.codec_id:
-                            output_lines.append(f"Codec ID                                 : {track.codec_id}")
+                        codec_id = get_field_value(track, 'codec_id')
+                        if codec_id:
+                            output_lines.append(f"Codec ID                                 : {codec_id}")
                         
                         # Codec ID/Info
-                        if hasattr(track, 'codec_id_info') and track.codec_id_info:
-                            output_lines.append(f"Codec ID/Info                            : {track.codec_id_info}")
+                        codec_id_info = get_field_value(track, 'codec_id_info')
+                        if codec_id_info:
+                            output_lines.append(f"Codec ID/Info                            : {codec_id_info}")
                         
                         # Duration
-                        if hasattr(track, 'duration') and track.duration:
-                            output_lines.append(f"Duration                                 : {format_duration(track.duration)}")
+                        duration = get_field_value(track, 'duration')
+                        if duration:
+                            output_lines.append(f"Duration                                 : {format_duration(duration)}")
                         
                         # Bit rate
-                        if hasattr(track, 'bit_rate') and track.bit_rate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
+                        bit_rate = get_field_value(track, 'bit_rate')
+                        if bit_rate:
+                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(bit_rate)}")
                         
-                        # Frame rate
-                        if hasattr(track, 'frame_rate') and track.frame_rate:
-                            output_lines.append(f"Frame rate                               : {track.frame_rate} FPS")
+                        # Frame rate (with SPF if available)
+                        frame_rate = get_field_value(track, 'frame_rate')
+                        if frame_rate:
+                            output_lines.append(f"Frame rate                               : {format_frame_rate(frame_rate)}")
                         
                         # Count of elements
-                        if hasattr(track, 'count_of_elements') and track.count_of_elements:
-                            output_lines.append(f"Count of elements                        : {track.count_of_elements}")
+                        element_count = get_field_value(track, 'element_count')
+                        if element_count:
+                            output_lines.append(f"Count of elements                        : {element_count}")
                         
-                        # Stream size (with percentage if file size available)
-                        if hasattr(track, 'stream_size') and track.stream_size:
-                            stream_size = get_readable_bytes(track.stream_size)
+                        # Stream size
+                        stream_size = get_field_value(track, 'stream_size')
+                        if stream_size:
+                            stream_size_str = get_readable_bytes(stream_size)
                             percentage_str = ""
                             if content_length:
                                 try:
-                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage = (int(stream_size) / int(content_length)) * 100
                                     percentage_str = f" ({percentage:.0f}%)"
                                 except:
                                     pass
-                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
+                            output_lines.append(f"Stream size                              : {stream_size_str}{percentage_str}")
                         
                         # Title
-                        if hasattr(track, 'title') and track.title:
-                            output_lines.append(f"Title                                    : {track.title}")
+                        title = get_field_value(track, 'title')
+                        if title:
+                            output_lines.append(f"Title                                    : {title}")
                         
                         # Language
-                        if hasattr(track, 'language') and track.language:
-                            lang_full = get_full_language_name(track.language) or track.language
+                        language = get_field_value(track, 'language')
+                        if language:
+                            # Try to get full language name if it's a code
+                            lang_full = get_full_language_name(language) or language
                             output_lines.append(f"Language                                 : {lang_full}")
                         
-                        # Default and Forced (corrected)
+                        # Default and Forced
                         default_line = format_boolean_field(track, 'default', 'Default')
                         if default_line:
                             output_lines.append(default_line)
@@ -813,6 +1001,125 @@ def mediainfo_api():
                         forced_line = format_boolean_field(track, 'forced', 'Forced')
                         if forced_line:
                             output_lines.append(forced_line)
+
+                    elif track.track_type == 'Image':
+                        image_count += 1
+                        if image_count == 1:
+                            output_lines.append("\nImage")
+                        else:
+                            output_lines.append(f"\nImage #{image_count}")
+                        
+                        # ID
+                        track_id = get_field_value(track, 'track_id')
+                        if track_id:
+                            output_lines.append(f"ID                                       : {track_id}")
+                            
+                        # Format
+                        format_val = get_field_value(track, 'format')
+                        if format_val:
+                            output_lines.append(f"Format                                   : {format_val}")
+                            
+                        # Format/Info
+                        format_info = get_field_value(track, 'format_info')
+                        if format_info:
+                            output_lines.append(f"Format/Info                              : {format_info}")
+                            
+                        # Muxing mode
+                        muxing_mode = get_field_value(track, 'muxing_mode')
+                        if muxing_mode:
+                            output_lines.append(f"Muxing mode                              : {muxing_mode}")
+                            
+                        # Codec ID
+                        codec_id = get_field_value(track, 'codec_id')
+                        if codec_id:
+                            output_lines.append(f"Codec ID                                 : {codec_id}")
+                            
+                        # Codec ID/Info
+                        codec_id_info = get_field_value(track, 'codec_id_info')
+                        if codec_id_info:
+                            output_lines.append(f"Codec ID/Info                            : {codec_id_info}")
+                            
+                        # Width
+                        width = get_field_value(track, 'width')
+                        if width:
+                            output_lines.append(f"Width                                    : {width} pixels")
+                            
+                        # Height
+                        height = get_field_value(track, 'height')
+                        if height:
+                            output_lines.append(f"Height                                   : {height} pixels")
+                            
+                        # Color space
+                        color_space = get_field_value(track, 'color_space')
+                        if color_space:
+                            output_lines.append(f"Color space                              : {color_space}")
+                            
+                        # Chroma subsampling
+                        chroma_subsampling = get_field_value(track, 'chroma_subsampling')
+                        if chroma_subsampling:
+                            output_lines.append(f"Chroma subsampling                       : {chroma_subsampling}")
+                            
+                        # Bit depth
+                        bit_depth = get_field_value(track, 'bit_depth')
+                        if bit_depth:
+                            output_lines.append(f"Bit depth                                : {bit_depth} bits")
+                            
+                        # Compression mode
+                        compression_mode = get_field_value(track, 'compression_mode')
+                        if compression_mode:
+                            output_lines.append(f"Compression mode                         : {compression_mode}")
+                            
+                        # Stream size
+                        stream_size = get_field_value(track, 'stream_size')
+                        if stream_size:
+                            stream_size_str = get_readable_bytes(stream_size)
+                            percentage_str = ""
+                            if content_length:
+                                try:
+                                    percentage = (int(stream_size) / int(content_length)) * 100
+                                    percentage_str = f" ({percentage:.0f}%)"
+                                except:
+                                    pass
+                            output_lines.append(f"Stream size                              : {stream_size_str}{percentage_str}")
+                            
+                        # Title
+                        title = get_field_value(track, 'title')
+                        if title:
+                            output_lines.append(f"Title                                    : {title}")
+                            
+                        # Language
+                        language = get_field_value(track, 'language')
+                        if language:
+                            lang_full = get_full_language_name(language) or language
+                            output_lines.append(f"Language                                 : {lang_full}")
+                            
+                        # Color range
+                        color_range = get_field_value(track, 'color_range')
+                        if color_range:
+                            output_lines.append(f"Color range                              : {color_range}")
+                            
+                        # Color primaries
+                        color_primaries = get_field_value(track, 'color_primaries')
+                        if color_primaries:
+                            output_lines.append(f"Color primaries                          : {color_primaries}")
+                            
+                        # Transfer characteristics
+                        transfer_characteristics = get_field_value(track, 'transfer_characteristics')
+                        if transfer_characteristics:
+                            output_lines.append(f"Transfer characteristics                 : {transfer_characteristics}")
+                            
+                        # Matrix coefficients
+                        matrix_coefficients = get_field_value(track, 'matrix_coefficients')
+                        if matrix_coefficients:
+                            output_lines.append(f"Matrix coefficients                      : {matrix_coefficients}")
+
+                        # ColorSpace_ICC
+                        if hasattr(track, 'colorspace_icc') and track.colorspace_icc:
+                             output_lines.append(f"ColorSpace_ICC                       : {track.colorspace_icc}")
+                        
+                        # colour_primaries_ICC_Description
+                        if hasattr(track, 'colour_primaries_icc_description') and track.colour_primaries_icc_description:
+                             output_lines.append(f"colour_primaries_ICC_Description     : {track.colour_primaries_icc_description}")
                     
                     elif track.track_type == 'Menu':
                         output_lines.append("\nMenu")

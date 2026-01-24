@@ -6,94 +6,42 @@ from flask import Flask, request, jsonify, send_from_directory
 from urllib.parse import unquote, urlparse
 import requests
 from pymediainfo import MediaInfo
+import pycountry
 
 app = Flask(__name__, static_folder='.')
 
-# Language code to full name mapping
-LANGUAGE_MAP = {
-    'en': 'English',
-    'eng': 'English',
-    'fr': 'French',
-    'fra': 'French',
-    'fre': 'French',
-    'es': 'Spanish',
-    'spa': 'Spanish',
-    'pt': 'Portuguese',
-    'por': 'Portuguese',
-    'de': 'German',
-    'deu': 'German',
-    'ger': 'German',
-    'it': 'Italian',
-    'ita': 'Italian',
-    'ja': 'Japanese',
-    'jpn': 'Japanese',
-    'ko': 'Korean',
-    'kor': 'Korean',
-    'zh': 'Chinese',
-    'chi': 'Chinese',
-    'zho': 'Chinese',
-    'ru': 'Russian',
-    'rus': 'Russian',
-    'ar': 'Arabic',
-    'ara': 'Arabic',
-    'hi': 'Hindi',
-    'hin': 'Hindi',
-    'nl': 'Dutch',
-    'nld': 'Dutch',
-    'dut': 'Dutch',
-    'sv': 'Swedish',
-    'swe': 'Swedish',
-    'no': 'Norwegian',
-    'nor': 'Norwegian',
-    'da': 'Danish',
-    'dan': 'Danish',
-    'fi': 'Finnish',
-    'fin': 'Finnish',
-    'pl': 'Polish',
-    'pol': 'Polish',
-    'tr': 'Turkish',
-    'tur': 'Turkish',
-    'el': 'Greek',
-    'ell': 'Greek',
-    'gre': 'Greek',
-    'he': 'Hebrew',
-    'heb': 'Hebrew',
-    'cs': 'Czech',
-    'ces': 'Czech',
-    'cze': 'Czech',
-    'hu': 'Hungarian',
-    'hun': 'Hungarian',
-    'th': 'Thai',
-    'tha': 'Thai',
-    'vi': 'Vietnamese',
-    'vie': 'Vietnamese',
-    'id': 'Indonesian',
-    'ind': 'Indonesian',
-    'ms': 'Malay',
-    'msa': 'Malay',
-    'may': 'Malay',
-    'ro': 'Romanian',
-    'ron': 'Romanian',
-    'rum': 'Romanian',
-    'uk': 'Ukrainian',
-    'ukr': 'Ukrainian',
-    'bg': 'Bulgarian',
-    'bul': 'Bulgarian',
-    'hr': 'Croatian',
-    'hrv': 'Croatian',
-    'sr': 'Serbian',
-    'srp': 'Serbian',
-    'sk': 'Slovak',
-    'slk': 'Slovak',
-    'slo': 'Slovak',
-}
-
 def get_full_language_name(lang_code):
-    """Convert ISO language code to full language name"""
+    """Convert ISO language code to full language name using pycountry"""
     if not lang_code:
         return None
-    lang_code_lower = str(lang_code).lower().strip()
-    return LANGUAGE_MAP.get(lang_code_lower, lang_code)  # Return original if not found
+    
+    try:
+        lang_code_str = str(lang_code).strip()
+        
+        # Try alpha_2 (2-letter code like 'en')
+        if len(lang_code_str) == 2:
+            lang = pycountry.languages.get(alpha_2=lang_code_str.lower())
+            if lang:
+                return lang.name
+        
+        # Try alpha_3 (3-letter code like 'eng')
+        if len(lang_code_str) == 3:
+            lang = pycountry.languages.get(alpha_3=lang_code_str.lower())
+            if lang:
+                return lang.name
+        
+        # Try by name (case-insensitive search)
+        try:
+            lang = pycountry.languages.lookup(lang_code_str)
+            if lang:
+                return lang.name
+        except LookupError:
+            pass
+        
+        # Return original if not found
+        return lang_code
+    except Exception:
+        return lang_code
 
 
 def get_readable_bytes(size_bytes):

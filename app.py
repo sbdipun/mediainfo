@@ -383,6 +383,14 @@ def mediainfo_api():
                         if hasattr(track, 'cover') and track.cover:
                             output_lines.append(f"Cover                                    : {track.cover}")
                         
+                        # Cover description
+                        if hasattr(track, 'cover_description') and track.cover_description:
+                            output_lines.append(f"Cover description                        : {track.cover_description}")
+                        
+                        # Cover type
+                        if hasattr(track, 'cover_type') and track.cover_type:
+                            output_lines.append(f"Cover type                               : {track.cover_type}")
+                        
                         # Attachments
                         if hasattr(track, 'attachments') and track.attachments:
                             output_lines.append(f"Attachments                              : {track.attachments}")
@@ -422,6 +430,18 @@ def mediainfo_api():
                         if hasattr(track, 'format_settings') and track.format_settings:
                             output_lines.append(f"Format settings                          : {track.format_settings}")
                         
+                        # Format settings, CABAC
+                        if hasattr(track, 'format_settings__cabac') and track.format_settings__cabac:
+                            output_lines.append(f"Format settings, CABAC                   : {track.format_settings__cabac}")
+                        
+                        # Format settings, Reference frames
+                        if hasattr(track, 'format_settings__reference_frames') and track.format_settings__reference_frames:
+                            output_lines.append(f"Format settings, Reference frames        : {track.format_settings__reference_frames}")
+                        
+                        # Format settings, Slice count
+                        if hasattr(track, 'format_settings__slice_count') and track.format_settings__slice_count:
+                            output_lines.append(f"Format settings, Slice count             : {track.format_settings__slice_count}")
+                        
                         # Codec ID
                         if hasattr(track, 'codec_id') and track.codec_id:
                             output_lines.append(f"Codec ID                                 : {track.codec_id}")
@@ -454,6 +474,10 @@ def mediainfo_api():
                         
                         if video_bitrate:
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(video_bitrate)}")
+                        
+                        # Nominal bit rate
+                        if hasattr(track, 'nominal_bit_rate') and track.nominal_bit_rate:
+                            output_lines.append(f"Nominal bit rate                         : {get_readable_bitrate(track.nominal_bit_rate)}")
 
                         
                         # Dimensions
@@ -570,6 +594,10 @@ def mediainfo_api():
                         if hasattr(track, 'commercial_name') and track.commercial_name:
                             output_lines.append(f"Commercial name                          : {track.commercial_name}")
                         
+                        # Format settings (PRIORITY - user requested)
+                        if hasattr(track, 'format_settings') and track.format_settings:
+                            output_lines.append(f"Format settings                          : {track.format_settings}")
+                        
                         # Codec ID
                         if hasattr(track, 'codec_id') and track.codec_id:
                             output_lines.append(f"Codec ID                                 : {track.codec_id}")
@@ -613,6 +641,10 @@ def mediainfo_api():
                                 except:
                                     pass
                             output_lines.append(f"Frame rate                               : {fr_str}")
+                        
+                        # Bit depth
+                        if hasattr(track, 'bit_depth') and track.bit_depth:
+                            output_lines.append(f"Bit depth                                : {track.bit_depth} bits")
                         
                         # Compression mode
                         if hasattr(track, 'compression_mode') and track.compression_mode:
@@ -660,6 +692,10 @@ def mediainfo_api():
                         forced_line = format_boolean_field(track, 'forced', 'Forced')
                         if forced_line:
                             output_lines.append(forced_line)
+                        
+                        # Original source medium
+                        if hasattr(track, 'original_source_medium') and track.original_source_medium:
+                            output_lines.append(f"Original source medium                   : {track.original_source_medium}")
                         
                         # Dialog Normalization - add dB unit
                         if hasattr(track, 'dialogue_normalization') and track.dialogue_normalization:

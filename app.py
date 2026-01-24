@@ -344,9 +344,22 @@ def mediainfo_api():
                         if hasattr(track, 'overall_bit_rate_mode') and track.overall_bit_rate_mode:
                             output_lines.append(f"Overall bit rate mode                    : {track.overall_bit_rate_mode}")
                         
-                        # Overall bit rate
+                        # Overall bit rate - calculate from file size if available
+                        overall_bitrate = None
                         if hasattr(track, 'overall_bit_rate') and track.overall_bit_rate:
-                            output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(track.overall_bit_rate)}")
+                            overall_bitrate = track.overall_bit_rate
+                        # Calculate real bitrate from full file size
+                        elif content_length and hasattr(track, 'duration') and track.duration:
+                            try:
+                                file_size_bits = int(content_length) * 8
+                                duration_seconds = float(track.duration) / 1000
+                                if duration_seconds > 0:
+                                    overall_bitrate = file_size_bits / duration_seconds
+                            except:
+                                pass
+                        
+                        if overall_bitrate:
+                            output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(overall_bitrate)}")
                         
                         # Frame rate (if available at container level)
                         if hasattr(track, 'frame_rate') and track.frame_rate:
@@ -411,9 +424,23 @@ def mediainfo_api():
                         if hasattr(track, 'bit_rate_mode') and track.bit_rate_mode:
                             output_lines.append(f"Bit rate mode                            : {track.bit_rate_mode}")
                         
-                        # Bit rate
+                        # Bit rate - calculate from stream size if available for accuracy
+                        video_bitrate = None
                         if hasattr(track, 'bit_rate') and track.bit_rate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(track.bit_rate)}")
+                            video_bitrate = track.bit_rate
+                        # Calculate real bitrate from stream size if available
+                        elif hasattr(track, 'stream_size') and track.stream_size and hasattr(track, 'duration') and track.duration:
+                            try:
+                                stream_size_bits = int(track.stream_size) * 8
+                                duration_seconds = float(track.duration) / 1000
+                                if duration_seconds > 0:
+                                    video_bitrate = stream_size_bits / duration_seconds
+                            except:
+                                pass
+                        
+                        if video_bitrate:
+                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(video_bitrate)}")
+
                         
                         # Dimensions
                         if hasattr(track, 'width') and hasattr(track, 'height') and track.width and track.height:
@@ -664,40 +691,42 @@ def mediainfo_api():
                     elif track.track_type == 'Menu':
                         output_lines.append("\nMenu")
                         
-                        # Add chapter information
-                        # Try to get chapter data from various possible attributes
-                        chapter_data = []
+                        # Extract chapter information
+                        # MediaInfo stores chapters as numbered attributes like:
+                        # "00_00_00_000" (time) and corresponding chapter name
+                        chapters = []
                         
-                        # Check for common chapter attribute patterns
-                        for i in range(1, 100):  # Check up to 100 chapters
-                            # Try various naming conventions
-                            time_attr = f"_{i:02d}_00_00_000" if i < 10 else f"_{i}_00_00_000"
-                            
-                            for attr_name in dir(track):
-                                if attr_name.startswith('_'):
-                                    continue
-                                    
+                        # Get all attributes from the menu track
+                        all_attrs = {}
+                        for attr_name in dir(track):
+                            if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
                                 attr_value = getattr(track, attr_name, None)
-                                if attr_value and str(i).zfill(2) in attr_name:
-                                    # Found a chapter entry
-                                    if ':' in str(attr_name) and '=' in str(attr_value):
-                                        chapter_data.append((attr_name, attr_value))
+                                if attr_value is not None and attr_name not in ['track_type', 'track_id']:
+                                    all_attrs[attr_name] = attr_value
                         
-                        # If we found chapter data, display it
-                        if chapter_data:
-                            for name, value in sorted(chapter_data):
-                                output_lines.append(f"{name}                             : {value}")
+                        # Look for chapter patterns -  attributes with timestamp format
+                        # Pattern: timestamps like "00_00_00_000" paired with chapter names
+                        timestamp_pattern = re.compile(r'^(\d{2}_\d{2}_\d{2}_\d{3})$')
+                        
+                        for attr_name, attr_value in sorted(all_attrs.items()):
+                            # Check if attribute name is a timestamp
+                            if timestamp_pattern.match(attr_name):
+                                # Convert timestamp format from "HH_MM_SS_mmm" to "HH:MM:SS.mmm"
+                                parts = attr_name.split('_')
+                                if len(parts) == 4:
+                                    timestamp = f"{parts[0]}:{parts[1]}:{parts[2]}.{parts[3]}"
+                                    chapter_name = str(attr_value) if attr_value else ""
+                                    chapters.append((timestamp, chapter_name))
+                        
+                        # Display chapters
+                        if chapters:
+                            for timestamp, name in chapters:
+                                # Format: "HH:MM:SS.mmm                             : :Chapter Name"
+                                output_lines.append(f"{timestamp}                             : :{name}")
                         else:
-                            # Fallback: display all menu-related attributes
-                            for attr_name in sorted(dir(track)):
-                                if not attr_name.startswith('_') and not callable(getattr(track, attr_name, None)):
-                                    attr_value = getattr(track, attr_name, None)
-                                    if attr_value is not None and attr_name not in ['track_type', 'track_id']:
-                                        # Format times as HH:MM:SS.mmm
-                                        if hasattr(track, attr_name.replace('_name', '')):
-                                            time_val = getattr(track, attr_name.replace('_name', ''), '')
-                                            if time_val and attr_name.endswith('_name'):
-                                                output_lines.append(f"{time_val}                             : :{attr_value}")
+                            # Fallback if no standard chapter format found - show all attributes
+                            for attr_name, attr_value in sorted(all_attrs.items()):
+                                output_lines.append(f"{attr_name}                             : {attr_value}")
                 
                 return '\n'.join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
         

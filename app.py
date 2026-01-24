@@ -344,22 +344,26 @@ def mediainfo_api():
                         if hasattr(track, 'overall_bit_rate_mode') and track.overall_bit_rate_mode:
                             output_lines.append(f"Overall bit rate mode                    : {track.overall_bit_rate_mode}")
                         
-                        # Overall bit rate - calculate from file size if available
+                        # Overall bit rate - sum of all track bitrates (video + audio + text)
                         overall_bitrate = None
                         if hasattr(track, 'overall_bit_rate') and track.overall_bit_rate:
                             overall_bitrate = track.overall_bit_rate
-                        # Calculate real bitrate from full file size
-                        elif content_length and hasattr(track, 'duration') and track.duration:
-                            try:
-                                file_size_bits = int(content_length) * 8
-                                duration_seconds = float(track.duration) / 1000
-                                if duration_seconds > 0:
-                                    overall_bitrate = file_size_bits / duration_seconds
-                            except:
-                                pass
+                        else:
+                            # Calculate by summing all track bitrates
+                            total_bitrate = 0
+                            for t in media_info.tracks:
+                                if t.track_type in ['Video', 'Audio', 'Text']:
+                                    if hasattr(t, 'bit_rate') and t.bit_rate:
+                                        try:
+                                            total_bitrate += float(t.bit_rate)
+                                        except:
+                                            pass
+                            if total_bitrate > 0:
+                                overall_bitrate = total_bitrate
                         
                         if overall_bitrate:
                             output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(overall_bitrate)}")
+
                         
                         # Frame rate (if available at container level)
                         if hasattr(track, 'frame_rate') and track.frame_rate:

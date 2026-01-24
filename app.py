@@ -363,9 +363,9 @@ def mediainfo_api():
                         if hasattr(track, 'frame_rate') and track.frame_rate:
                             output_lines.append(f"Frame rate                               : {format_frame_rate(track.frame_rate)}")
                         
-                        # Title
-                        if hasattr(track, 'title') and track.title:
-                            output_lines.append(f"Title                                    : {track.title}")
+                        # Movie name (alternative title)
+                        if hasattr(track, 'movie_name') and track.movie_name:
+                            output_lines.append(f"Movie name                               : {track.movie_name}")
                         
                         # Encoded date
                         if hasattr(track, 'encoded_date') and track.encoded_date:
@@ -378,6 +378,14 @@ def mediainfo_api():
                         # Writing library
                         if hasattr(track, 'writing_library') and track.writing_library:
                             output_lines.append(f"Writing library                          : {track.writing_library}")
+                        
+                        # Cover (attachment indicator)
+                        if hasattr(track, 'cover') and track.cover:
+                            output_lines.append(f"Cover                                    : {track.cover}")
+                        
+                        # Attachments
+                        if hasattr(track, 'attachments') and track.attachments:
+                            output_lines.append(f"Attachments                              : {track.attachments}")
                         
                         # ErrorDetectionType
                         if hasattr(track, 'extra'):
@@ -405,6 +413,10 @@ def mediainfo_api():
                         # Format profile
                         if hasattr(track, 'format_profile') and track.format_profile:
                             output_lines.append(f"Format profile                           : {track.format_profile}")
+                        
+                        # Format settings (Muxing mode may be included here)
+                        if hasattr(track, 'muxing_mode') and track.muxing_mode:
+                            output_lines.append(f"Muxing mode                              : {track.muxing_mode}")
                         
                         # Format settings
                         if hasattr(track, 'format_settings') and track.format_settings:
@@ -490,10 +502,17 @@ def mediainfo_api():
                         if hasattr(track, 'scan_type') and track.scan_type:
                             output_lines.append(f"Scan type                                : {track.scan_type}")
                         
-                        # Stream size
+                        # Stream size (with percentage if file size available)
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            output_lines.append(f"Stream size                              : {stream_size}")
+                            percentage_str = ""
+                            if content_length:
+                                try:
+                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage_str = f" ({percentage:.0f}%)"
+                                except:
+                                    pass
+                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
                         
                         # Writing library
                         if hasattr(track, 'writing_library') and track.writing_library:
@@ -583,18 +602,42 @@ def mediainfo_api():
                             else:
                                 output_lines.append(f"Sampling rate                            : {sr:.0f} Hz")
                         
-                        # Frame rate
+                        # Frame rate (with SPF if available)
                         if hasattr(track, 'frame_rate') and track.frame_rate:
-                            output_lines.append(f"Frame rate                               : {track.frame_rate} FPS")
+                            fr_str = f"{track.frame_rate} FPS"
+                            # Add SPF (Samples Per Frame) if we have sampling rate
+                            if hasattr(track, 'sampling_rate') and track.sampling_rate:
+                                try:
+                                    spf = int(float(track.sampling_rate) / float(track.frame_rate))
+                                    fr_str += f" ({spf} SPF)"
+                                except:
+                                    pass
+                            output_lines.append(f"Frame rate                               : {fr_str}")
                         
                         # Compression mode
                         if hasattr(track, 'compression_mode') and track.compression_mode:
                             output_lines.append(f"Compression mode                         : {track.compression_mode}")
                         
-                        # Stream size
+                        # Delay relative to video
+                        if hasattr(track, 'delay_relative_to_video') and track.delay_relative_to_video:
+                            delay_val = track.delay_relative_to_video
+                            try:
+                                delay_ms = int(delay_val)
+                                output_lines.append(f"Delay relative to video                  : {delay_ms} ms")
+                            except:
+                                output_lines.append(f"Delay relative to video                  : {delay_val}")
+                        
+                        # Stream size (with percentage if file size available)
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            output_lines.append(f"Stream size                              : {stream_size}")
+                            percentage_str = ""
+                            if content_length:
+                                try:
+                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage_str = f" ({percentage:.0f}%)"
+                                except:
+                                    pass
+                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
                         
                         # Title
                         if hasattr(track, 'title') and track.title:
@@ -624,6 +667,34 @@ def mediainfo_api():
                             if not dialval.endswith('dB') and not dialval.endswith(' dB'):
                                 dialval = f"{dialval} dB"
                             output_lines.append(f"Dialog Normalization                     : {dialval}")
+                        
+                        # Compression parameters (AC-3/EAC-3)
+                        if hasattr(track, 'compr') and track.compr:
+                            val = str(track.compr)
+                            output_lines.append(f"compr                                    : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'dynrng') and track.dynrng:
+                            val = str(track.dynrng)
+                            output_lines.append(f"dynrng                                   : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'cmixlev') and track.cmixlev:
+                            val = str(track.cmixlev)
+                            output_lines.append(f"cmixlev                                  : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'surmixlev') and track.surmixlev:
+                            val = str(track.surmixlev)
+                            output_lines.append(f"surmixlev                                : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'ltrtcmixlev') and track.ltrtcmixlev:
+                            val = str(track.ltrtcmixlev)
+                            output_lines.append(f"ltrtcmixlev                              : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'ltrtsurmixlev') and track.ltrtsurmixlev:
+                            val = str(track.ltrtsurmixlev)
+                            output_lines.append(f"ltrtsurmixlev                            : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'lorocmixlev') and track.lorocmixlev:
+                            val = str(track.lorocmixlev)
+                            output_lines.append(f"lorocmixlev                              : {val if 'dB' in val else val + ' dB'}")
+                        if hasattr(track, 'lorosurmixlev') and track.lorosurmixlev:
+                            val = str(track.lorosurmixlev)
+                            output_lines.append(f"lorosurmixlev                            : {val if 'dB' in val else val + ' dB'}")
+                        
+                        # Dialog normalization statistics
                         if hasattr(track, 'dialnorm_average') and track.dialnorm_average:
                             val = str(track.dialnorm_average)
                             output_lines.append(f"dialnorm_Average                         : {val if 'dB' in val else val + ' dB'}")
@@ -649,6 +720,10 @@ def mediainfo_api():
                         if hasattr(track, 'format') and track.format:
                             output_lines.append(f"Format                                   : {track.format}")
                         
+                        # Muxing mode
+                        if hasattr(track, 'muxing_mode') and track.muxing_mode:
+                            output_lines.append(f"Muxing mode                              : {track.muxing_mode}")
+                        
                         # Codec ID
                         if hasattr(track, 'codec_id') and track.codec_id:
                             output_lines.append(f"Codec ID                                 : {track.codec_id}")
@@ -673,10 +748,17 @@ def mediainfo_api():
                         if hasattr(track, 'count_of_elements') and track.count_of_elements:
                             output_lines.append(f"Count of elements                        : {track.count_of_elements}")
                         
-                        # Stream size
+                        # Stream size (with percentage if file size available)
                         if hasattr(track, 'stream_size') and track.stream_size:
                             stream_size = get_readable_bytes(track.stream_size)
-                            output_lines.append(f"Stream size                              : {stream_size}")
+                            percentage_str = ""
+                            if content_length:
+                                try:
+                                    percentage = (int(track.stream_size) / int(content_length)) * 100
+                                    percentage_str = f" ({percentage:.0f}%)"
+                                except:
+                                    pass
+                            output_lines.append(f"Stream size                              : {stream_size}{percentage_str}")
                         
                         # Title
                         if hasattr(track, 'title') and track.title:

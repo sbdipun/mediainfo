@@ -3,33 +3,33 @@
     --primary-500: hsl(250, 84%, 60%);
     --primary-600: hsl(250, 84%, 54%);
     --primary-700: hsl(250, 84%, 48%);
-    
+
     --success-500: hsl(142, 71%, 45%);
     --success-600: hsl(142, 71%, 38%);
-    
+
     --surface-100: hsl(240, 15%, 9%);
     --surface-200: hsl(240, 15%, 12%);
     --surface-300: hsl(240, 15%, 16%);
     --surface-400: hsl(240, 12%, 22%);
-    
+
     --text-primary: hsl(0, 0%, 98%);
     --text-secondary: hsl(240, 5%, 65%);
     --text-tertiary: hsl(240, 5%, 50%);
-    
+
     --border-color: hsla(240, 15%, 30%, 0.3);
     --border-focus: var(--primary-500);
-    
+
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, var(--primary-600) 0%, hsl(280, 84%, 60%) 100%);
     --gradient-surface: linear-gradient(135deg, var(--surface-200) 0%, var(--surface-300) 100%);
     --gradient-bg: radial-gradient(ellipse at top, hsl(250, 60%, 10%) 0%, var(--surface-100) 50%);
-    
+
     /* Shadows */
     --shadow-sm: 0 2px 8px hsla(0, 0%, 0%, 0.3);
     --shadow-md: 0 4px 16px hsla(0, 0%, 0%, 0.4);
     --shadow-lg: 0 8px 32px hsla(0, 0%, 0%, 0.5);
     --shadow-glow: 0 0 40px hsla(250, 84%, 60%, 0.3);
-    
+
     /* Spacing */
     --space-xs: 0.5rem;
     --space-sm: 0.75rem;
@@ -37,14 +37,14 @@
     --space-lg: 1.5rem;
     --space-xl: 2rem;
     --space-2xl: 3rem;
-    
+
     /* Border Radius */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 20px;
     --radius-full: 9999px;
-    
+
     /* Transitions */
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -241,7 +241,7 @@ body {
     box-shadow: 0 0 0 4px hsla(250, 84%, 60%, 0.15);
 }
 
-.input:focus + .input-icon,
+.input:focus+.input-icon,
 .input-wrapper:focus-within .input-icon {
     color: var(--primary-500);
 }
@@ -311,12 +311,12 @@ body {
     transition: transform var(--transition-base);
 }
 
-.radio-input:checked ~ .radio-custom {
+.radio-input:checked~.radio-custom {
     border-color: var(--primary-500);
     background: hsla(250, 84%, 60%, 0.1);
 }
 
-.radio-input:checked ~ .radio-custom::after {
+.radio-input:checked~.radio-custom::after {
     transform: translate(-50%, -50%) scale(1);
 }
 
@@ -563,6 +563,7 @@ body {
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -573,6 +574,7 @@ body {
         opacity: 0;
         transform: translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -584,6 +586,7 @@ body {
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -597,38 +600,248 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.7;
     }
 }
 
 /* Responsive Design */
-@media (max-width: 640px) {
+
+/* Tablet and smaller desktops (768px and below) */
+@media (max-width: 768px) {
     .container {
-        padding: var(--space-lg) var(--space-md);
+        padding: var(--space-xl) var(--space-md);
     }
-    
+
     .logo-text {
-        font-size: 2rem;
+        font-size: 2.25rem;
     }
-    
+
     .subtitle {
-        font-size: 1rem;
+        font-size: 1.0625rem;
     }
-    
+
     .card {
         padding: var(--space-lg);
     }
-    
+
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-sm);
+    }
+
+    .output-content {
+        font-size: 0.8125rem;
+        padding: var(--space-md);
+        max-height: 500px;
+    }
+
+    /* Better text wrapping for long values */
+    .output-content {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+}
+
+/* Mobile (640px and below) */
+@media (max-width: 640px) {
+    :root {
+        /* Adjust spacing for mobile */
+        --space-xl: 1.5rem;
+        --space-2xl: 2rem;
+    }
+
+    .container {
+        padding: var(--space-lg) var(--space-md);
+    }
+
+    .logo-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .logo-text {
+        font-size: 2rem;
+    }
+
+    .subtitle {
+        font-size: 1rem;
+    }
+
+    .card {
+        padding: var(--space-lg);
+        border-radius: var(--radius-lg);
+    }
+
     .card-header {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
+    .card-header h2 {
+        font-size: 1.25rem;
+    }
+
+    .pill-container {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .radio-group {
         grid-template-columns: 1fr;
+    }
+
+    .radio-label {
+        padding: var(--space-md);
+    }
+
+    /* Improve touch targets for buttons */
+    .btn {
+        min-height: 48px;
+        padding: var(--space-md) var(--space-lg);
+        font-size: 1rem;
+    }
+
+    .example-btn {
+        min-height: 40px;
+        padding: var(--space-sm) var(--space-md);
+        font-size: 0.875rem;
+    }
+
+    /* Better copy button positioning */
+    .btn-secondary {
+        min-height: 44px;
+    }
+
+    /* Output content mobile optimizations */
+    .output-content {
+        font-size: 0.75rem;
+        padding: var(--space-md);
+        max-height: 400px;
+        line-height: 1.5;
+    }
+
+    /* Better handling of long filenames */
+    .output-content {
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+}
+
+/* Extra small phones (480px and below) */
+@media (max-width: 480px) {
+    .container {
+        padding: var(--space-md) var(--space-sm);
+    }
+
+    .logo-wrapper {
+        flex-direction: column;
+        gap: var(--space-sm);
+    }
+
+    .logo-text {
+        font-size: 1.75rem;
+        text-align: center;
+    }
+
+    .subtitle {
+        font-size: 0.9375rem;
+        text-align: center;
+    }
+
+    .card {
+        padding: var(--space-md);
+    }
+
+    .card-header h2 {
+        font-size: 1.125rem;
+    }
+
+    .input {
+        padding: var(--space-sm) var(--space-sm) var(--space-sm) 2.75rem;
+        font-size: 0.9375rem;
+    }
+
+    .input-icon {
+        left: var(--space-sm);
+        width: 18px;
+        height: 18px;
+    }
+
+    /* Stack pills vertically on very small screens */
+    .pill-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .pill {
+        text-align: center;
+    }
+
+    .radio-label {
+        padding: var(--space-sm);
+    }
+
+    .radio-text {
+        font-size: 0.875rem;
+    }
+
+    .radio-subtitle {
+        font-size: 0.8125rem;
+    }
+
+    /* Button optimizations */
+    .btn {
+        font-size: 0.9375rem;
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .btn-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* Output section */
+    .output-content {
+        font-size: 0.6875rem;
+        padding: var(--space-sm);
+        max-height: 350px;
+        line-height: 1.4;
+    }
+
+    /* Examples section */
+    .example-links {
+        flex-direction: column;
+    }
+
+    .example-btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    /* Footer */
+    .footer {
+        font-size: 0.8125rem;
+        text-align: center;
+    }
+
+    /* Loading overlay */
+    .loading-spinner {
+        width: 48px;
+        height: 48px;
+    }
+
+    .loading-text {
+        font-size: 1rem;
+        text-align: center;
+        padding: 0 var(--space-md);
     }
 }

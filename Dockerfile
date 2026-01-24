@@ -20,6 +20,7 @@ RUN apt-get -y install mediainfo megatools
 RUN pip3 install --upgrade \
     Flask==3.0.0 \
     gunicorn==21.2.0 \
+    pycountry==24.6.1 \
     pymediainfo==6.1.0 \
     requests==2.31.0 \
     google-api-python-client \

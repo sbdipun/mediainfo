@@ -2,12 +2,12 @@ import re
 import os
 import json
 import tempfile
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from urllib.parse import unquote, urlparse
 import requests
 from pymediainfo import MediaInfo
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='.')
 
 def get_readable_bytes(size_bytes):
     """Convert bytes to human readable format"""
@@ -612,6 +612,7 @@ def info():
         "description": "Extract detailed media information from video and audio files",
         "endpoints": {
             "/": "Main MediaInfo analysis endpoint",
+            "/ui": "Web interface",
             "/health": "Health check",
             "/info": "API information"
         },
@@ -625,6 +626,22 @@ def info():
         "gdrive_conversion": "Google Drive URLs are automatically converted to gdl.anshumanpm.eu.org direct links",
         "deployment": "Render with Docker"
     })
+
+@app.route('/ui')
+def web_interface():
+    """Serve the web interface"""
+    return send_from_directory('.', 'index.html')
+
+@app.route('/styles.css')
+def serve_css():
+    """Serve CSS file"""
+    return send_from_directory('.', 'styles.css')
+
+@app.route('/script.js')
+def serve_js():
+    """Serve JavaScript file"""
+    return send_from_directory('.', 'script.js')
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))

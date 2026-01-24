@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaInfo Analyzer - Extract Media Information</title>
+    <meta name="description" content="Analyze media files and extract detailed technical information from direct URLs and Google Drive links">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="background-gradient"></div>
+    <div class="container">
+        <header class="header">
+            <div class="logo-wrapper">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 16V8C21 6.89543 20.1046 6 19 6H5C3.89543 6 3 6.89543 3 8V16M21 16C21 17.1046 20.1046 18 19 18H5C3.89543 18 3 17.1046 3 16M21 16L18.5657 13.5657C18.2533 13.2533 17.7467 13.2533 17.4343 13.5657L14 17M3 16L5.43431 13.5657C5.74673 13.2533 6.25327 13.2533 6.56569 13.5657L10 17M10 17L12.5657 14.4343C12.8781 14.1219 13.3846 14.1219 13.6971 14.4343L18 18.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="8.5" cy="9.5" r="1.5" fill="currentColor"/>
+                </svg>
+                <h1 class="logo-text">MediaInfo Analyzer</h1>
+            </div>
+            <p class="subtitle">Extract detailed technical information from media files</p>
+        </header>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Analyze Media File</h2>
+                <div class="pill-container">
+                    <span class="pill pill-success">Direct URLs</span>
+                    <span class="pill pill-primary">Google Drive</span>
+                </div>
+            </div>
+
+            <form id="mediaForm" class="form">
+                <div class="input-group">
+                    <label for="urlInput" class="label">
+                        Media URL
+                        <span class="label-hint">Enter a direct download URL or Google Drive link</span>
+                    </label>
+                    <div class="input-wrapper">
+                        <svg class="input-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 13C10.4295 13.5741 10.9774 14.0492 11.6066 14.3929C12.2357 14.7367 12.9315 14.9411 13.6467 14.9923C14.3618 15.0435 15.0796 14.9404 15.7513 14.6898C16.4231 14.4392 17.0331 14.0471 17.54 13.54L20.54 10.54C21.4508 9.59699 21.9548 8.33397 21.9434 7.02299C21.932 5.71201 21.4061 4.45794 20.4791 3.53091C19.5521 2.60388 18.298 2.07802 16.987 2.06663C15.676 2.05523 14.413 2.55921 13.47 3.47L11.75 5.18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M14 11C13.5705 10.4259 13.0226 9.95083 12.3934 9.60707C11.7642 9.26331 11.0685 9.05889 10.3533 9.00771C9.63816 8.95653 8.92037 9.05963 8.24861 9.31022C7.57685 9.56081 6.96684 9.9529 6.45996 10.46L3.45996 13.46C2.54917 14.403 2.04519 15.666 2.05659 16.977C2.06798 18.288 2.59384 19.5421 3.52087 20.4691C4.4479 21.3961 5.70197 21.922 7.01295 21.9334C8.32393 21.9448 9.58694 21.4408 10.53 20.53L12.24 18.82" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <input 
+                            type="url" 
+                            id="urlInput" 
+                            class="input" 
+                            placeholder="https://example.com/video.mp4 or Google Drive URL"
+                            required
+                        >
+                    </div>
+                </div>
+
+                <div class="format-selector">
+                    <label class="label">Output Format</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="format" value="text" checked class="radio-input">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">
+                                <span class="radio-title">Text Format</span>
+                                <span class="radio-subtitle">MediaInfo-style formatted text</span>
+                            </span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="format" value="json" class="radio-input">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">
+                                <span class="radio-title">JSON Format</span>
+                                <span class="radio-subtitle">Structured data for developers</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" id="analyzeBtn" class="btn btn-primary">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="btn-text">Analyze Media</span>
+                    <span class="btn-loader"></span>
+                </button>
+            </form>
+
+            <div id="exampleUrls" class="examples">
+                <p class="examples-title">Example URLs:</p>
+                <div class="example-links">
+                    <button class="example-btn" data-url="https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4">
+                        Direct URL
+                    </button>
+                    <button class="example-btn" data-url="https://drive.google.com/file/d/1ABC123/view">
+                        Google Drive
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="outputSection" class="output-section hidden">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Analysis Result</h2>
+                    <button id="copyBtn" class="btn btn-secondary">
+                        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 4V16C8 17.1046 8.89543 18 10 18H18C19.1046 18 20 17.1046 20 16V7.24162C20 6.7034 19.7831 6.18789 19.3982 5.80883L16.1566 2.6344C15.7616 2.24546 15.2288 2.02138 14.6723 2.00482L10 2C8.89543 2 8 2.89543 8 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M16 18V20C16 21.1046 15.1046 22 14 22H6C4.89543 22 4 21.1046 4 20V9C4 7.89543 4.89543 7 6 7H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span class="btn-text">Copy</span>
+                    </button>
+                </div>
+                <div id="outputContent" class="output-content"></div>
+            </div>
+        </div>
+
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Analyzing media file...</p>
+        </div>
+
+        <footer class="footer">
+            <p>Powered by MediaInfo API • Supports direct URLs and Google Drive links</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -231,7 +231,6 @@ def download_sample(url, max_size=10*1024*1024):
         if content_disposition:
             # Try to extract filename from Content-Disposition header
             # Format: attachment; filename="example.mkv" or filename*=UTF-8''example.mkv
-            import re
             matches = re.findall(r'filename\*?=(?:UTF-8\'\')?["\']?([^"\';\r\n]+)', content_disposition)
             if matches:
                 filename = unquote(matches[0].strip())
@@ -333,6 +332,7 @@ def mediainfo_api():
                 output_lines = []
                 audio_count = 0
                 text_count = 0
+                image_count = 0
                 
                 for track in media_info.tracks:
                     if track.track_type == 'General':
@@ -611,7 +611,6 @@ def mediainfo_api():
                                 h = float(height)
                                 fr_str = format_frame_rate(frame_rate)
                                 # Extract number from "23.976 (24000/1001) FPS" -> 23.976
-                                import re
                                 match = re.search(r"([\d\.]+)", fr_str)
                                 if match:
                                     fr = float(match.group(1))

@@ -66,7 +66,7 @@ def get_readable_bytes(size_bytes):
         return "Unknown"
 
 def get_readable_bitrate(bitrate_bps):
-    """Convert bitrate to MediaInfo format (always kb/s)"""
+    """Convert bitrate to MediaInfo format (Mb/s for high, kb/s for low)"""
     if not bitrate_bps:
         return None
     
@@ -74,7 +74,7 @@ def get_readable_bitrate(bitrate_bps):
     if isinstance(bitrate_bps, str):
         bitrate_str = str(bitrate_bps).strip()
         # Check if already formatted with units
-        if 'kb/s' in bitrate_str.lower() or 'mb/s' in bitrate_str.lower() or 'kbps' in bitrate_str.lower():
+        if 'kb/s' in bitrate_str.lower() or 'mb/s' in bitrate_str.lower() or 'kbps' in bitrate_str.lower() or 'mbps' in bitrate_str.lower():
             return bitrate_str
         # Try to extract numeric value from string (e.g., "4 737" or "4737")
         try:
@@ -86,12 +86,20 @@ def get_readable_bitrate(bitrate_bps):
     
     try:
         bitrate_bps = float(bitrate_bps)
-        # Always display in kb/s to match MediaInfo standard
         bitrate_kbps = bitrate_bps / 1000
-        # Format with space for thousands like MediaInfo does
-        if bitrate_kbps >= 1000:
-            return f"{bitrate_kbps:,.0f} kb/s".replace(',', ' ')
-        return f"{bitrate_kbps:.0f} kb/s"
+        bitrate_mbps = bitrate_bps / 1000000
+        
+        # Use Mb/s for bitrates >= 1 Mb/s (typical for video)
+        if bitrate_mbps >= 1:
+            return f"{bitrate_mbps:.1f} Mb/s"
+        # Use kb/s for lower bitrates (typical for audio)
+        elif bitrate_kbps >= 1:
+            # Format with space for thousands like MediaInfo does
+            if bitrate_kbps >= 1000:
+                return f"{bitrate_kbps:,.0f} kb/s".replace(',', ' ')
+            return f"{bitrate_kbps:.0f} kb/s"
+        else:
+            return f"{bitrate_bps:.0f} b/s"
     except:
         return str(bitrate_bps) if bitrate_bps else None
 
@@ -408,20 +416,25 @@ def mediainfo_api():
                         if overall_bit_rate_mode:
                             output_lines.append(f"Overall bit rate mode                    : {overall_bit_rate_mode}")
                         
-                        # Overall bit rate - use MediaInfo value or calculate from file size
+                        # Overall bit rate - calculate from actual file size (Content-Length) and duration
                         overall_bitrate = None
-                        track_bitrate = get_field_value(track, 'overall_bit_rate')
-                        if track_bitrate:
-                            overall_bitrate = track_bitrate
-                        # Fallback: calculate from file size and duration
-                        elif content_length and hasattr(track, 'duration') and track.duration:
+                        duration_val = get_field_value(track, 'duration')
+                        
+                        # FIRST: Calculate from real file size and duration
+                        if content_length and duration_val:
                             try:
                                 file_size_bits = int(content_length) * 8
-                                duration_seconds = float(track.duration) / 1000
+                                duration_seconds = float(duration_val) / 1000
                                 if duration_seconds > 0:
                                     overall_bitrate = file_size_bits / duration_seconds
                             except:
                                 pass
+                        
+                        # Fallback: use MediaInfo's value if calculation failed
+                        if not overall_bitrate:
+                            track_bitrate = get_field_value(track, 'overall_bit_rate')
+                            if track_bitrate:
+                                overall_bitrate = track_bitrate
                         
                         if overall_bitrate:
                             output_lines.append(f"Overall bit rate                         : {get_readable_bitrate(overall_bitrate)}")
@@ -563,16 +576,27 @@ def mediainfo_api():
                         if bit_rate_mode:
                             output_lines.append(f"Bit rate mode                            : {bit_rate_mode}")
                         
-                        # Bit rate - use MediaInfo value or calculate from stream size
+                        # Bit rate - try multiple approaches to get video bitrate
                         video_bitrate = None
+                        video_bitrate_display = None
+                        
+                        # Try primary bit_rate field
                         bit_rate = get_field_value(track, 'bit_rate')
                         if bit_rate:
-                            try:
-                                video_bitrate = float(bit_rate)
-                            except:
-                                pass
-                        # Calculate from stream size if bitrate not available or seems wrong
-                        if not video_bitrate or video_bitrate < 100:  # Suspiciously low
+                            video_bitrate_display = get_readable_bitrate(bit_rate)
+                        
+                        # Try other_bit_rate if primary didn't work
+                        if not video_bitrate_display:
+                            other_bit_rate = getattr(track, 'other_bit_rate', None)
+                            if other_bit_rate:
+                                if isinstance(other_bit_rate, list) and len(other_bit_rate) > 0:
+                                    video_bitrate_display = other_bit_rate[0]
+                                elif other_bit_rate:
+                                    video_bitrate_display = str(other_bit_rate)
+                        
+                        # Calculate from stream size proportion if still no bitrate
+                        # Use the stream_size from sample to estimate proportion of overall bitrate
+                        if not video_bitrate_display:
                             stream_size = get_field_value(track, 'stream_size')
                             duration_val = get_field_value(track, 'duration')
                             
@@ -582,11 +606,12 @@ def mediainfo_api():
                                     duration_seconds = float(duration_val) / 1000
                                     if duration_seconds > 0:
                                         video_bitrate = stream_size_bits / duration_seconds
+                                        video_bitrate_display = get_readable_bitrate(video_bitrate)
                                 except:
                                     pass
                         
-                        if video_bitrate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(video_bitrate)}")
+                        if video_bitrate_display:
+                            output_lines.append(f"Bit rate                                 : {video_bitrate_display}")
                         
                         # Nominal bit rate
                         nominal_bit_rate = get_field_value(track, 'nominal_bit_rate')

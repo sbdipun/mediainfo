@@ -447,13 +447,28 @@ def mediainfo_api():
                         if attachments:
                             output_lines.append(f"Attachments                              : {attachments}")
                         
-                        # ErrorDetectionType
+                        # IMDB
+                        imdb = get_field_value(track, 'imdb')
+                        if imdb:
+                            output_lines.append(f"IMDB                                     : {imdb}")
+                        
+                        # TMDB
+                        tmdb = get_field_value(track, 'tmdb')
+                        if tmdb:
+                            output_lines.append(f"TMDB                                     : {tmdb}")
+                        
+                        # ErrorDetectionType and FileExtension_Invalid
                         if hasattr(track, 'extra'):
                             extra = track.extra
                             if hasattr(extra, 'ErrorDetectionType') and extra.ErrorDetectionType:
                                 output_lines.append(f"ErrorDetectionType                       : {extra.ErrorDetectionType}")
                             if hasattr(extra, 'FileExtension_Invalid') and extra.FileExtension_Invalid:
                                 output_lines.append(f"FileExtension_Invalid                    : {extra.FileExtension_Invalid}")
+                            # Also check for IMDB/TMDB in extra
+                            if not imdb and hasattr(extra, 'imdb') and extra.imdb:
+                                output_lines.append(f"IMDB                                     : {extra.imdb}")
+                            if not tmdb and hasattr(extra, 'tmdb') and extra.tmdb:
+                                output_lines.append(f"TMDB                                     : {extra.tmdb}")
                     
                     elif track.track_type == 'Video':
                         output_lines.append("\nVideo")
@@ -497,6 +512,11 @@ def mediainfo_api():
                         ref_frames = get_field_value(track, 'format_settings__reference_frames')
                         if ref_frames:
                             output_lines.append(f"Format settings, Reference frames        : {ref_frames}")
+                        
+                        # Format settings, GOP
+                        format_gop = get_field_value(track, 'format_settings__gop')
+                        if format_gop:
+                            output_lines.append(f"Format settings, GOP                     : {format_gop}")
                         
                         # Format settings, Slice count
                         slice_count = get_field_value(track, 'format_settings__slice_count')
@@ -733,6 +753,11 @@ def mediainfo_api():
                         bit_rate = get_field_value(track, 'bit_rate')
                         if bit_rate:
                             output_lines.append(f"Bit rate                                 : {get_readable_bitrate(bit_rate)}")
+                        
+                        # Maximum bit rate
+                        max_bit_rate = get_field_value(track, 'maximum_bit_rate')
+                        if max_bit_rate:
+                            output_lines.append(f"Maximum bit rate                         : {get_readable_bitrate(max_bit_rate)}")
                         
                         # Channel(s)
                         channels = get_field_value(track, 'channel_s')
@@ -1158,17 +1183,15 @@ def mediainfo_api():
                                     ss = ss_ms[:2]
                                     ms = ss_ms[2:]
                                     timestamp = f"{hh}:{mm}:{ss}.{ms}"
-                                    # Extract chapter name, skip "en:" prefix if present
+                                    # Keep chapter name as-is (including en: prefix if present)
                                     chapter_name = str(attr_value) if attr_value else ""
-                                    if chapter_name.startswith('en:'):
-                                        chapter_name = chapter_name[3:]  # Remove "en:" prefix
                                     chapters.append((timestamp, chapter_name))
                         
                         # Display chapters
                         if chapters:
                             for timestamp, name in chapters:
-                                # Format: "HH:MM:SS.mmm                             : :Chapter Name"
-                                output_lines.append(f"{timestamp}                             : :{name}")
+                                # Format: "HH:MM:SS.mmm                             : en:Chapter Name"
+                                output_lines.append(f"{timestamp}                             : {name}")
                 
                 return '\n'.join(output_lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
         

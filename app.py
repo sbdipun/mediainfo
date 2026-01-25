@@ -68,14 +68,32 @@ def get_readable_bytes(size_bytes):
 def get_readable_bitrate(bitrate_bps):
     """Convert bitrate to MediaInfo format (always kb/s)"""
     if not bitrate_bps:
-        return "Unknown"
+        return None
+    
+    # If it's already a formatted string with units, return as-is
+    if isinstance(bitrate_bps, str):
+        bitrate_str = str(bitrate_bps).strip()
+        # Check if already formatted with units
+        if 'kb/s' in bitrate_str.lower() or 'mb/s' in bitrate_str.lower() or 'kbps' in bitrate_str.lower():
+            return bitrate_str
+        # Try to extract numeric value from string (e.g., "4 737" or "4737")
+        try:
+            # Remove spaces and try to parse
+            clean_str = bitrate_str.replace(' ', '').replace(',', '')
+            bitrate_bps = float(clean_str)
+        except:
+            return bitrate_str  # Return original string if can't parse
+    
     try:
         bitrate_bps = float(bitrate_bps)
         # Always display in kb/s to match MediaInfo standard
         bitrate_kbps = bitrate_bps / 1000
+        # Format with space for thousands like MediaInfo does
+        if bitrate_kbps >= 1000:
+            return f"{bitrate_kbps:,.0f} kb/s".replace(',', ' ')
         return f"{bitrate_kbps:.0f} kb/s"
     except:
-        return "Unknown"
+        return str(bitrate_bps) if bitrate_bps else None
 
 def format_duration(duration_ms):
     """Convert duration to MediaInfo format (e.g., '1 h 35 min')"""
@@ -343,10 +361,13 @@ def mediainfo_api():
                         if unique_id:
                             output_lines.append(f"Unique ID                                : {unique_id}")
                         
-                        # Complete name
-                        complete_name = get_field_value(track, 'complete_name') or get_field_value(track, 'file_name')
-                        if complete_name:
-                            output_lines.append(f"Complete name                            : {complete_name}")
+                        # Complete name - prefer filename from HTTP header over MediaInfo
+                        if filename and filename not in ['media_file', '']:
+                            output_lines.append(f"Complete name                            : {filename}")
+                        else:
+                            complete_name = get_field_value(track, 'complete_name') or get_field_value(track, 'file_name')
+                            if complete_name:
+                                output_lines.append(f"Complete name                            : {complete_name}")
                         
                         # Format
                         format_val = get_field_value(track, 'format')
@@ -358,20 +379,24 @@ def mediainfo_api():
                         if format_version:
                             output_lines.append(f"Format version                           : {format_version}")
                         
-                        # File size
-                        file_size_val = get_field_value(track, 'file_size')
-                        if file_size_val:
-                            # Use existing logic for file size if it's already bytes, otherwise handle string
-                            if isinstance(file_size_val, (int, float)) or (isinstance(file_size_val, str) and file_size_val.isdigit()):
-                                file_size = get_readable_bytes(file_size_val)
-                                if not content_length:
-                                    try:
-                                        content_length = int(file_size_val)
-                                    except:
-                                        pass
-                            else:
-                                file_size = str(file_size_val)
-                            output_lines.append(f"File size                                : {file_size}")
+                        # File size - prefer Content-Length from HTTP response for actual file size
+                        if content_length:
+                            try:
+                                file_size = get_readable_bytes(int(content_length))
+                                if file_size:
+                                    output_lines.append(f"File size                                : {file_size}")
+                            except:
+                                pass
+                        else:
+                            # Fallback to MediaInfo file size (will only be sample size)
+                            file_size_val = get_field_value(track, 'file_size')
+                            if file_size_val:
+                                if isinstance(file_size_val, (int, float)) or (isinstance(file_size_val, str) and file_size_val.isdigit()):
+                                    file_size = get_readable_bytes(file_size_val)
+                                else:
+                                    file_size = str(file_size_val)
+                                if file_size:
+                                    output_lines.append(f"File size                                : {file_size}")
                         
                         # Duration
                         duration = get_field_value(track, 'duration')
@@ -749,15 +774,37 @@ def mediainfo_api():
                         if bit_rate_mode:
                             output_lines.append(f"Bit rate mode                            : {bit_rate_mode}")
                         
-                        # Bit rate
+                        # Bit rate - try multiple sources for TrueHD and other variable bitrate codecs
                         bit_rate = get_field_value(track, 'bit_rate')
-                        if bit_rate:
-                            output_lines.append(f"Bit rate                                 : {get_readable_bitrate(bit_rate)}")
+                        bit_rate_display = get_readable_bitrate(bit_rate) if bit_rate else None
+                        
+                        # Try other_bit_rate if primary bit_rate didn't work
+                        if not bit_rate_display:
+                            other_bit_rate = getattr(track, 'other_bit_rate', None)
+                            if other_bit_rate:
+                                if isinstance(other_bit_rate, list) and len(other_bit_rate) > 0:
+                                    bit_rate_display = other_bit_rate[0]
+                                elif other_bit_rate:
+                                    bit_rate_display = str(other_bit_rate)
+                        
+                        if bit_rate_display:
+                            output_lines.append(f"Bit rate                                 : {bit_rate_display}")
                         
                         # Maximum bit rate
                         max_bit_rate = get_field_value(track, 'maximum_bit_rate')
-                        if max_bit_rate:
-                            output_lines.append(f"Maximum bit rate                         : {get_readable_bitrate(max_bit_rate)}")
+                        max_bit_rate_display = get_readable_bitrate(max_bit_rate) if max_bit_rate else None
+                        
+                        # Try other_maximum_bit_rate if primary didn't work
+                        if not max_bit_rate_display:
+                            other_max_bit_rate = getattr(track, 'other_maximum_bit_rate', None)
+                            if other_max_bit_rate:
+                                if isinstance(other_max_bit_rate, list) and len(other_max_bit_rate) > 0:
+                                    max_bit_rate_display = other_max_bit_rate[0]
+                                elif other_max_bit_rate:
+                                    max_bit_rate_display = str(other_max_bit_rate)
+                        
+                        if max_bit_rate_display:
+                            output_lines.append(f"Maximum bit rate                         : {max_bit_rate_display}")
                         
                         # Channel(s)
                         channels = get_field_value(track, 'channel_s')

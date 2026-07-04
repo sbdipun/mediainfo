@@ -115,19 +115,21 @@ function displayCompareOutput(data) {
     const slides = [];
 
     for (let index = 0; index < slideCount; index++) {
+        const timestamp = (data.sources[0].timestamps && data.sources[0].timestamps[index]) ? data.sources[0].timestamps[index] : '';
         const slideSources = data.sources.map((source, sourceIndex) => {
             const thumbnail = source.thumbnails[index] || '';
             return `
                 <div class="compare-source">
                     <div class="compare-source-title">Source ${sourceIndex + 1}</div>
                     <div class="compare-source-url">${escapeHtml(source.url)}</div>
-                    <img src="${thumbnail}" alt="Thumbnail ${index + 1} from source ${sourceIndex + 1}">
+                    <img src="${thumbnail}" alt="Thumbnail ${index + 1} from source ${sourceIndex + 1}" data-timestamp="${timestamp}" data-source="${sourceIndex + 1}">
                 </div>
             `;
         }).join('');
 
         slides.push(`
             <div class="compare-slide" data-index="${index}">
+                <div class="compare-slide-header">Timestamp: ${timestamp}s</div>
                 ${slideSources}
             </div>
         `);
@@ -147,7 +149,29 @@ function displayCompareOutput(data) {
     document.getElementById('comparePrev').addEventListener('click', () => setCompareSlide(compareIndex - 1));
     document.getElementById('compareNext').addEventListener('click', () => setCompareSlide(compareIndex + 1));
 
+    const thumbnails = compareOutputContent.querySelectorAll('.compare-source img');
+    thumbnails.forEach(img => {
+        img.addEventListener('click', () => openPreview(img.src, img.dataset.timestamp, img.dataset.source));
+    });
+
     setCompareSlide(0);
+}
+
+function openPreview(src, timestamp, source) {
+    const overlay = document.getElementById('previewOverlay');
+    const previewImage = document.getElementById('previewImage');
+    const previewTimestamp = document.getElementById('previewTimestamp');
+
+    previewImage.src = src;
+    previewTimestamp.textContent = `Source ${source} • Timestamp: ${timestamp}s`;
+    overlay.classList.remove('hidden');
+}
+
+function closePreview() {
+    const overlay = document.getElementById('previewOverlay');
+    const previewImage = document.getElementById('previewImage');
+    overlay.classList.add('hidden');
+    previewImage.src = '';
 }
 
 function setCompareSlide(index) {
@@ -259,6 +283,26 @@ function showLoading(show) {
         }
     }
 }
+
+// Close preview overlay on click or escape
+const previewClose = document.getElementById('previewClose');
+const previewOverlay = document.getElementById('previewOverlay');
+if (previewClose) {
+    previewClose.addEventListener('click', closePreview);
+}
+if (previewOverlay) {
+    previewOverlay.addEventListener('click', (event) => {
+        if (event.target === previewOverlay) {
+            closePreview();
+        }
+    });
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        closePreview();
+    }
+});
 
 // Copy to Clipboard
 async function handleCopy() {

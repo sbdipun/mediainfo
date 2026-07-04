@@ -243,6 +243,15 @@ def is_executable_available(name):
     return shutil.which(name) is not None
 
 
+def get_uniform_timestamps(count, duration):
+    """Return evenly spaced timestamps across the video duration."""
+    if duration is None or duration <= 0:
+        duration = 12.0
+
+    count = max(1, min(int(count), 8))
+    return [round(duration * (i + 1) / (count + 1), 2) for i in range(count)]
+
+
 def probe_duration(url):
     """Probe remote media duration using ffprobe."""
     ffprobe = shutil.which('ffprobe')
@@ -270,13 +279,12 @@ def probe_duration(url):
         raise Exception('Invalid duration returned by ffprobe')
 
 
-def extract_thumbnails_from_url(url, count=3):
-    """Extract random thumbnails from a remote URL using ffmpeg."""
+def extract_thumbnails_from_url(url, count=3, timestamps=None):
+    """Extract thumbnails from remote URL using ffmpeg."""
     ffmpeg = shutil.which('ffmpeg')
     if not ffmpeg:
         raise Exception('ffmpeg is not installed or not available on PATH')
 
-    original_url = url
     if is_gdrive_url(url):
         url = convert_gdrive_to_direct_link(url)
 
@@ -286,18 +294,11 @@ def extract_thumbnails_from_url(url, count=3):
     except Exception:
         duration = None
 
-    if duration is None or duration <= 0:
-        duration = 12.0
-
-    # Limit count to a reasonable maximum
-    count = max(1, min(int(count), 8))
-    random_timestamps = set()
-    while len(random_timestamps) < count:
-        timestamp = random.uniform(0, max(0.5, duration - 0.5))
-        random_timestamps.add(round(timestamp, 2))
+    if timestamps is None:
+        timestamps = get_uniform_timestamps(count, duration)
 
     thumbnails = []
-    for timestamp in sorted(random_timestamps):
+    for timestamp in timestamps:
         output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
         output_file.close()
 
@@ -1401,12 +1402,27 @@ def compare_thumbnails():
     count_value = max(1, min(count_value, 8))
 
     try:
+        durations = []
+        for source_url in [url1, url2]:
+            try:
+                duration = probe_duration(convert_gdrive_to_direct_link(source_url) if is_gdrive_url(source_url) else source_url)
+                if duration is None or duration <= 0:
+                    duration = 12.0
+            except Exception:
+                duration = 12.0
+            durations.append(duration)
+
+        # Use the shortest duration to generate the same absolute timestamps for both sources.
+        min_duration = min(durations) if durations else 12.0
+        timestamps = get_uniform_timestamps(count_value, min_duration)
+
         sources = []
         for source_url in [url1, url2]:
-            thumbnails = extract_thumbnails_from_url(source_url, count=count_value)
+            thumbnails = extract_thumbnails_from_url(source_url, timestamps=timestamps)
             sources.append({
                 "url": source_url,
-                "thumbnails": thumbnails
+                "thumbnails": thumbnails,
+                "timestamps": timestamps
             })
 
         return jsonify({

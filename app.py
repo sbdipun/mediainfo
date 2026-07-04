@@ -1,7 +1,11 @@
 import re
 import os
 import json
+import base64
 import tempfile
+import random
+import shutil
+import subprocess
 from flask import Flask, request, jsonify, send_from_directory
 from urllib.parse import unquote, urlparse
 import requests
@@ -233,6 +237,104 @@ def convert_gdrive_to_direct_link(url):
             direct_url = f"https://gdl.anshumanpm.eu.org/direct.aspx?id={file_id}"
             return direct_url
     return url
+
+def is_executable_available(name):
+    """Return True if an executable is available on PATH."""
+    return shutil.which(name) is not None
+
+
+def probe_duration(url):
+    """Probe remote media duration using ffprobe."""
+    ffprobe = shutil.which('ffprobe')
+    if not ffprobe:
+        raise Exception('ffprobe is not installed or not available on PATH')
+
+    command = [
+        ffprobe,
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        url
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=40)
+    if result.returncode != 0:
+        raise Exception(f'ffprobe failed: {result.stderr.strip() or result.stdout.strip()}')
+
+    duration_text = result.stdout.strip()
+    if not duration_text:
+        raise Exception('Unable to determine video duration')
+
+    try:
+        return float(duration_text)
+    except ValueError:
+        raise Exception('Invalid duration returned by ffprobe')
+
+
+def extract_thumbnails_from_url(url, count=3):
+    """Extract random thumbnails from a remote URL using ffmpeg."""
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+        raise Exception('ffmpeg is not installed or not available on PATH')
+
+    original_url = url
+    if is_gdrive_url(url):
+        url = convert_gdrive_to_direct_link(url)
+
+    duration = None
+    try:
+        duration = probe_duration(url)
+    except Exception:
+        duration = None
+
+    if duration is None or duration <= 0:
+        duration = 12.0
+
+    # Limit count to a reasonable maximum
+    count = max(1, min(int(count), 8))
+    random_timestamps = set()
+    while len(random_timestamps) < count:
+        timestamp = random.uniform(0, max(0.5, duration - 0.5))
+        random_timestamps.add(round(timestamp, 2))
+
+    thumbnails = []
+    for timestamp in sorted(random_timestamps):
+        output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+        output_file.close()
+
+        ffmpeg_args = [
+            ffmpeg,
+            '-hide_banner',
+            '-loglevel', 'error',
+            '-ss', str(timestamp),
+            '-i', url,
+            '-frames:v', '1',
+            '-q:v', '3',
+            '-vf', 'scale=640:-2',
+            '-y',
+            output_file.name
+        ]
+
+        result = subprocess.run(ffmpeg_args, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0 or not os.path.exists(output_file.name):
+            try:
+                os.unlink(output_file.name)
+            except Exception:
+                pass
+            raise Exception(f'ffmpeg extraction failed at {timestamp}s: {result.stderr.strip() or result.stdout.strip()}')
+
+        try:
+            with open(output_file.name, 'rb') as f:
+                image_data = f.read()
+            encoded = base64.b64encode(image_data).decode('utf-8')
+            thumbnails.append(f'data:image/jpeg;base64,{encoded}')
+        finally:
+            try:
+                os.unlink(output_file.name)
+            except Exception:
+                pass
+
+    return thumbnails
+
 
 def download_sample(url, max_size=10*1024*1024):
     """Download sample from direct URL (including converted Google Drive links)"""
@@ -1280,6 +1382,43 @@ def mediainfo_api():
             "url": url
         }), 500
 
+@app.route('/compare-thumbnails')
+def compare_thumbnails():
+    url1 = request.args.get('url1')
+    url2 = request.args.get('url2')
+    count = request.args.get('count', '3')
+
+    if not url1 or not url2:
+        return jsonify({
+            "error": "Both url1 and url2 are required for thumbnail comparison"
+        }), 400
+
+    try:
+        count_value = int(count)
+    except ValueError:
+        count_value = 3
+
+    count_value = max(1, min(count_value, 8))
+
+    try:
+        sources = []
+        for source_url in [url1, url2]:
+            thumbnails = extract_thumbnails_from_url(source_url, count=count_value)
+            sources.append({
+                "url": source_url,
+                "thumbnails": thumbnails
+            })
+
+        return jsonify({
+            "sources": sources,
+            "count": count_value,
+            "message": "Thumbnail comparison generated successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "error": f"Thumbnail comparison failed: {str(e)}"
+        }), 500
+
 @app.route('/health')
 def health():
     """Health check endpoint"""
@@ -1306,6 +1445,7 @@ def info():
         "description": "Extract detailed media information from video and audio files",
         "endpoints": {
             "/": "Main MediaInfo analysis endpoint",
+            "/compare-thumbnails": "Compare thumbnails between two remote media URLs",
             "/ui": "Web interface",
             "/health": "Health check",
             "/info": "API information"

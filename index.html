@@ -98,6 +98,51 @@
             </div>
         </div>
 
+        <div class="card">
+            <div class="card-header">
+                <h2>Compare Thumbnails</h2>
+            </div>
+
+            <form id="compareForm" class="form">
+                <div class="input-group">
+                    <label for="compareUrl1" class="label">
+                        Source URL 1
+                        <span class="label-hint">Enter a direct download URL for the first media file</span>
+                    </label>
+                    <input type="url" id="compareUrl1" class="input" placeholder="https://example.com/video1.mp4" required>
+                </div>
+
+                <div class="input-group">
+                    <label for="compareUrl2" class="label">
+                        Source URL 2
+                        <span class="label-hint">Enter a direct download URL for the second media file</span>
+                    </label>
+                    <input type="url" id="compareUrl2" class="input" placeholder="https://example.com/video2.mp4" required>
+                </div>
+
+                <div class="input-group">
+                    <label for="compareCount" class="label">
+                        Number of snapshots
+                        <span class="label-hint">How many random thumbnails to extract per source (1-8)</span>
+                    </label>
+                    <input type="number" id="compareCount" class="input" min="1" max="8" value="3" required>
+                </div>
+
+                <button type="submit" id="compareBtn" class="btn btn-primary">
+                    <span class="btn-text">Compare Thumbnails</span>
+                </button>
+            </form>
+
+            <div id="compareOutputSection" class="output-section hidden">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Thumbnail Comparison</h2>
+                    </div>
+                    <div id="compareOutputContent" class="compare-output-content"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="outputSection" class="output-section hidden">
             <div class="card">
                 <div class="card-header">

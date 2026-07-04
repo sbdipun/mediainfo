@@ -120,23 +120,45 @@ function displayCompareOutput(data) {
 
     for (let index = 0; index < slideCount; index++) {
         const timestamp = (data.sources[0].timestamps && data.sources[0].timestamps[index]) ? data.sources[0].timestamps[index] : '';
-        const slideSources = data.sources.map((source, sourceIndex) => {
-            const thumbnail = source.thumbnails[index] || '';
-            return `
-                <div class="compare-source">
-                    <div class="compare-source-title">Source ${sourceIndex + 1}</div>
-                    <div class="compare-source-url">${escapeHtml(source.url)}</div>
-                    <img src="${thumbnail}" alt="Thumbnail ${index + 1} from source ${sourceIndex + 1}" data-timestamp="${timestamp}" data-source="${sourceIndex + 1}">
-                </div>
-            `;
-        }).join('');
+        if (data.sources.length >= 2) {
+            const thumbA = data.sources[0].thumbnails[index] || '';
+            const thumbB = data.sources[1].thumbnails[index] || '';
 
-        slides.push(`
-            <div class="compare-slide" data-index="${index}">
-                <div class="compare-slide-header">Timestamp: ${timestamp}s</div>
-                ${slideSources}
-            </div>
-        `);
+            slides.push(`
+                <div class="compare-slide" data-index="${index}">
+                    <div class="split-compare" data-index="${index}">
+                        <div class="split-bottom">
+                            <img src="${thumbB}" alt="Source 2 - ${index + 1}" data-timestamp="${timestamp}" data-source="2">
+                        </div>
+                        <div class="split-top" style="width:50%">
+                            <img src="${thumbA}" alt="Source 1 - ${index + 1}" data-timestamp="${timestamp}" data-source="1">
+                        </div>
+                        <div class="split-handle" role="separator" tabindex="0" aria-orientation="vertical">
+                            <div class="handle-icon">‹›</div>
+                        </div>
+                    </div>
+                    <div class="compare-slide-meta">Timestamp: ${timestamp}s</div>
+                </div>
+            `);
+        } else {
+            const slideSources = data.sources.map((source, sourceIndex) => {
+                const thumbnail = source.thumbnails[index] || '';
+                return `
+                    <div class="compare-source">
+                        <div class="compare-source-title">Source ${sourceIndex + 1}</div>
+                        <div class="compare-source-url">${escapeHtml(source.url)}</div>
+                        <img src="${thumbnail}" alt="Thumbnail ${index + 1} from source ${sourceIndex + 1}" data-timestamp="${timestamp}" data-source="${sourceIndex + 1}">
+                    </div>
+                `;
+            }).join('');
+
+            slides.push(`
+                <div class="compare-slide" data-index="${index}">
+                    <div class="compare-slide-header">Timestamp: ${timestamp}s</div>
+                    ${slideSources}
+                </div>
+            `);
+        }
     }
 
     compareOutputContent.innerHTML = `
@@ -162,10 +184,18 @@ function displayCompareOutput(data) {
         });
     }
 
-    const thumbnails = compareOutputContent.querySelectorAll('.compare-source img');
+    // Attach preview click to any image (both traditional and split compare)
+    const thumbnails = compareOutputContent.querySelectorAll('.compare-source img, .split-compare img');
     thumbnails.forEach(img => {
-        img.addEventListener('click', () => openPreview(img.src, img.dataset.timestamp, img.dataset.source));
+        img.addEventListener('click', (e) => {
+            // open preview for clicked image
+            openPreview(img.src, img.dataset.timestamp, img.dataset.source);
+            e.stopPropagation();
+        });
     });
+
+    // Initialize split compare draggable sliders
+    initSplitSliders();
 
     setCompareSlide(0);
 }
@@ -214,6 +244,83 @@ function setCompareSlide(index) {
     if (slider) {
         slider.value = index + 1;
     }
+}
+
+// Initialize draggable split compare sliders
+function initSplitSliders() {
+    const splitContainers = compareOutputContent.querySelectorAll('.split-compare');
+    splitContainers.forEach(container => {
+        const top = container.querySelector('.split-top');
+        const bottom = container.querySelector('.split-bottom');
+        const handle = container.querySelector('.split-handle');
+        const topImg = top ? top.querySelector('img') : null;
+        const bottomImg = bottom ? bottom.querySelector('img') : null;
+
+        if (!top || !bottom || !handle) return;
+
+        // Ensure initial handle position
+        const setPosition = (clientX) => {
+            const rect = container.getBoundingClientRect();
+            let x = clientX - rect.left;
+            x = Math.max(0, Math.min(rect.width, x));
+            const percent = (x / rect.width) * 100;
+            top.style.width = percent + '%';
+            handle.style.left = percent + '%';
+        };
+
+        // Pointer drag handlers
+        let dragging = false;
+
+        handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            dragging = true;
+            handle.setPointerCapture(e.pointerId);
+        });
+
+        handle.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            setPosition(e.clientX);
+        });
+
+        handle.addEventListener('pointerup', (e) => {
+            dragging = false;
+            try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+        });
+
+        // Also allow dragging by pointer on container
+        container.addEventListener('pointerdown', (e) => {
+            if (e.target === handle) return;
+            setPosition(e.clientX);
+        });
+
+        container.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            setPosition(e.clientX);
+        });
+
+        // Keyboard support on handle
+        handle.addEventListener('keydown', (e) => {
+            const rect = container.getBoundingClientRect();
+            const step = rect.width * 0.05; // 5% step
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+                const current = parseFloat(top.style.width) || 50;
+                const newWidth = Math.max(0, current - 5);
+                top.style.width = newWidth + '%';
+                handle.style.left = newWidth + '%';
+                e.preventDefault();
+            } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+                const current = parseFloat(top.style.width) || 50;
+                const newWidth = Math.min(100, current + 5);
+                top.style.width = newWidth + '%';
+                handle.style.left = newWidth + '%';
+                e.preventDefault();
+            }
+        });
+
+        // Open preview when clicking images
+        if (topImg) topImg.addEventListener('click', () => openPreview(topImg.src, topImg.dataset.timestamp, topImg.dataset.source));
+        if (bottomImg) bottomImg.addEventListener('click', () => openPreview(bottomImg.src, bottomImg.dataset.timestamp, bottomImg.dataset.source));
+    });
 }
 
 function showCompareOutput() {

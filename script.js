@@ -87,12 +87,16 @@ async function compareThumbnails(url1, url2, count) {
         });
 
         const response = await fetch(`${API_BASE_URL}/compare-thumbnails?${query.toString()}`);
+        const parsed = await parseResponseSafe(response);
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to compare thumbnails');
+            const msg = parsed && parsed.error ? parsed.error : (typeof parsed === 'string' ? parsed : 'Failed to compare thumbnails');
+            throw new Error(msg);
         }
 
-        const data = await response.json();
+        const data = (parsed && typeof parsed === 'object') ? parsed : null;
+        if (!data) {
+            throw new Error('Invalid server response for thumbnail comparison');
+        }
         compareData = data;
         compareIndex = 0;
         displayCompareOutput(data);
@@ -141,6 +145,7 @@ function displayCompareOutput(data) {
         </div>
         <div class="compare-controls">
             <button type="button" id="comparePrev" class="btn btn-secondary compare-btn">Previous</button>
+            <input type="range" id="compareSlider" min="1" max="${slideCount}" value="1" step="1" aria-label="Compare slide">
             <span class="compare-progress">Slide <span id="compareSlideIndex">1</span> of ${slideCount}</span>
             <button type="button" id="compareNext" class="btn btn-secondary compare-btn">Next</button>
         </div>
@@ -148,6 +153,14 @@ function displayCompareOutput(data) {
 
     document.getElementById('comparePrev').addEventListener('click', () => setCompareSlide(compareIndex - 1));
     document.getElementById('compareNext').addEventListener('click', () => setCompareSlide(compareIndex + 1));
+
+    const slider = compareOutputContent.querySelector('#compareSlider');
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            const val = Number(e.target.value);
+            if (!Number.isNaN(val)) setCompareSlide(val - 1);
+        });
+    }
 
     const thumbnails = compareOutputContent.querySelectorAll('.compare-source img');
     thumbnails.forEach(img => {
@@ -196,6 +209,11 @@ function setCompareSlide(index) {
     if (progress) {
         progress.textContent = index + 1;
     }
+
+    const slider = compareOutputContent.querySelector('#compareSlider');
+    if (slider) {
+        slider.value = index + 1;
+    }
 }
 
 function showCompareOutput() {
@@ -219,21 +237,35 @@ async function analyzeMedia(url, format) {
         
         // Make API request
         const response = await fetch(apiUrl);
-        
+        const parsed = await parseResponseSafe(response);
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to analyze media');
+            const msg = parsed && parsed.error ? parsed.error : (typeof parsed === 'string' ? parsed : 'Failed to analyze media');
+            throw new Error(msg);
         }
-        
+
         // Get response based on format
         if (format === 'json') {
-            const data = await response.json();
-            currentOutput = JSON.stringify(data, null, 2);
-            displayOutput(currentOutput, 'json');
+            if (parsed && typeof parsed === 'object') {
+                currentOutput = JSON.stringify(parsed, null, 2);
+                displayOutput(currentOutput, 'json');
+            } else if (typeof parsed === 'string') {
+                // Server returned non-JSON text even though JSON requested
+                currentOutput = parsed;
+                displayOutput(currentOutput, 'text');
+            } else {
+                currentOutput = '';
+                displayOutput('No content returned', 'text');
+            }
         } else {
-            const data = await response.text();
-            currentOutput = data;
-            displayOutput(data, 'text');
+            if (typeof parsed === 'string') {
+                currentOutput = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+                currentOutput = JSON.stringify(parsed, null, 2);
+            } else {
+                currentOutput = '';
+            }
+            displayOutput(currentOutput, 'text');
         }
         
         showOutput();
@@ -362,6 +394,17 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Utility: Parse fetch Response safely (handles empty or non-JSON bodies)
+async function parseResponseSafe(response) {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        return text;
+    }
 }
 
 // Add error notification animations
